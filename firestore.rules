@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 전역 차단 (명시적 허용 없으면 쓰기 불가)
+    match /{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    
+    // 1. 시간표 콜렉션 (핵심 보안 적용)
+    match /timetables/{uid} {
+      allow read: if request.auth != null;
+      
+      // 생성: 로그인된 UID와 토큰 이메일이 일치해야 함
+      allow create: if request.auth != null 
+                    && request.auth.uid == uid 
+                    && request.resource.data.email == request.auth.token.email;
+      
+      // 업데이트: 본인 이메일과 일치하면 전체 허용.
+      // 교환(Swap) 시스템을 위해 타인 시간표 업데이트 시 'schedule' 배열만 제한적 접근 허용
+      allow update: if request.auth != null 
+                    && (
+                      resource.data.email == request.auth.token.email 
+                      || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schedule'])
+                    );
+                    
+      // 삭제: 관리자(jih751@gmail.com)만 샘플 데이터 정리를 위해 허용
+      allow delete: if request.auth != null && request.auth.token.email == 'jih751@gmail.com';
+    }
+    
+    // 2. 교체 기록 및 알림 (누구나 쓰기 가능해야 상호 공강 요청/알림 전송 가능)
+    match /replacements/{repId} {
+      allow read, write: if request.auth != null;
+    }
+    match /notifications/{notifId} {
+      allow read: if request.auth != null && resource.data.targetUid == request.auth.uid;
+      allow write: if request.auth != null; 
+      allow update: if request.auth != null && resource.data.targetUid == request.auth.uid;
+    }
+    
+    // 3. 특별실 예약 & 학사 일정
+    match /room_bookings/{bookingId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    match /events/{eventId} {
+      allow read, write: if request.auth != null; // 학사 일정은 로그인한 교사 누구나 등록 가능
+    }
+  }
+}

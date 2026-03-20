@@ -1,0 +1,299 @@
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { LogOut, CalendarRange, ChevronLeft, ChevronRight, Settings, Loader2, ArrowLeft } from 'lucide-react';
+import { db } from '../lib/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import type { Timetable, ClassSlot } from '../types';
+import { executeSwapTransaction } from '../utils/timetableApi';
+import { startOfWeek, addWeeks, subWeeks, format, addDays } from 'date-fns';
+import { Link } from 'react-router-dom';
+
+const DAYS = ['월', '화', '수', '목', '금'];
+const PERIODS = [1, 2, 3, 4, 5, 6, 7];
+
+const GlobalTimetablePage: React.FC = () => {
+  const { user, logout } = useAuth();
+  const [allTimetables, setAllTimetables] = useState<Timetable[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // 교체 선택 상태
+  const [selection, setSelection] = useState<{
+    teacherId: string;
+    dayOfWeek: string;
+    period: number;
+    subject: string;
+  } | null>(null);
+
+  const weekStartsOn = startOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekDisplay = `${format(weekStartsOn, 'yyyy년 M월 d일')} 주간`;
+
+  const handlePrevWeek = () => setCurrentDate(prev => subWeeks(prev, 1));
+  const handleNextWeek = () => setCurrentDate(prev => addWeeks(prev, 1));
+
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribeTimetables = onSnapshot(collection(db, 'timetables'), (snapshot) => {
+      const lists: Timetable[] = [];
+      snapshot.forEach(doc => lists.push({ id: doc.id, ...doc.data() } as Timetable));
+      // teacherName 기준으로 정렬 (번호 부여를 위해)
+      lists.sort((a, b) => a.teacherName.localeCompare(b.teacherName));
+      setAllTimetables(lists);
+      setLoading(false);
+    });
+
+    return () => unsubscribeTimetables();
+  }, []);
+
+  const handleCellClick = async (timetable: Timetable, day: string, period: number, slot?: ClassSlot) => {
+    if (processing) return;
+
+    // 1. 첫 번째 선택 (내 수업이어야 함)
+    if (!selection) {
+      if (timetable.id === user?.uid) {
+        if (!slot?.subject) {
+          alert('원본 수업이 있는 셀을 선택해주세요.');
+          return;
+        }
+        setSelection({
+          teacherId: timetable.id,
+          dayOfWeek: day,
+          period,
+          subject: slot.subject
+        });
+      } else {
+        alert('먼저 본인의 수업 중 하나를 선택해주세요.');
+      }
+      return;
+    }
+
+    // 2. 선택 취소
+    if (timetable.id === selection.teacherId && day === selection.dayOfWeek && period === selection.period) {
+      setSelection(null);
+      return;
+    }
+
+    // 3. 두 번째 선택
+    if (timetable.id === selection.teacherId) {
+       alert('자신의 수업끼리는 교체할 수 없습니다.');
+       setSelection(null);
+       return;
+    }
+
+    if (!slot?.subject) {
+      alert('상대방의 수업이 있는 셀을 선택해주세요.');
+      setSelection(null);
+      return;
+    }
+
+    const confirmMsg = `[내 수업] ${selection.dayOfWeek}(${selection.period}) ${selection.subject}\n[상대 수업] ${day}(${period}) ${slot.subject}\n\n위 두 수업을 상호 공강 조건에 맞춰 교체하시겠습니까?`;
+    
+    if (window.confirm(confirmMsg)) {
+      setProcessing(true);
+      try {
+        const sourceDate = format(addDays(weekStartsOn, DAYS.indexOf(selection.dayOfWeek)), 'yyyy-MM-dd');
+        const targetDate = format(addDays(weekStartsOn, DAYS.indexOf(day)), 'yyyy-MM-dd');
+
+        await executeSwapTransaction(
+          selection.teacherId,
+          timetable.id,
+          sourceDate,
+          selection.dayOfWeek,
+          selection.period,
+          targetDate,
+          day,
+          period
+        );
+        alert('성공적으로 교체되었습니다.');
+      } catch (error: any) {
+        alert(`교체 실패: ${error.message}`);
+      } finally {
+        setProcessing(false);
+        setSelection(null);
+      }
+    } else {
+      setSelection(null);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+      <header className="bg-white shadow-sm border-b border-slate-300 sticky top-0 z-40">
+        <div className="max-w-[1800px] mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/dashboard" className="p-2 -ml-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors" title="메인 대시보드로 돌아가기">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <h1 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+              <CalendarRange className="w-5 h-5 text-blue-600" />
+              전체 시간표
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link to="/mytimetable" className="p-1.5 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded flex items-center gap-1 border border-transparent hover:border-slate-300 transition-all">
+              <Settings className="w-4 h-4" /> 내 시간표
+            </Link>
+            <div className="w-px h-4 bg-slate-300 mx-1"></div>
+            <button onClick={logout} className="ml-1 p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-all">
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-[1800px] w-full mx-auto p-2 md:p-4 overflow-hidden flex flex-col">
+        <div className="bg-white border border-slate-300 shadow-sm flex flex-col h-full flex-1">
+          {/* Header Controls */}
+          <div className="p-2 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">
+            <div className="flex items-center gap-2">
+              <button onClick={handlePrevWeek} className="p-1 border border-slate-300 bg-white hover:bg-slate-100 rounded text-slate-600"><ChevronLeft className="w-4 h-4" /></button>
+              <h2 className="text-sm font-bold text-slate-800 px-2 min-w-[120px] text-center">{weekDisplay}</h2>
+              <button onClick={handleNextWeek} className="p-1 border border-slate-300 bg-white hover:bg-slate-100 rounded text-slate-600"><ChevronRight className="w-4 h-4" /></button>
+            </div>
+            
+            <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
+               <div className="flex items-center gap-1">
+                 <div className="w-3 h-3 border-2 border-blue-500 bg-blue-50"></div> 원본
+               </div>
+               <div className="flex items-center gap-1">
+                 <div className="w-3 h-3 hover:bg-blue-50/50 border border-transparent"></div> 교체대상
+               </div>
+            </div>
+          </div>
+
+          {/* Grid Container */}
+          <div className="flex-1 overflow-auto custom-scrollbar bg-slate-200">
+            <table className="border-collapse text-[11px] table-fixed bg-white m-0" style={{ width: 'max-content' }}>
+              <thead className="sticky top-0 z-30 font-bold text-slate-800">
+                {/* 1 Row: Dates */}
+                <tr>
+                  <th colSpan={2} className="w-[120px] border border-slate-300 bg-slate-100 sticky left-0 z-40"></th>
+                  {DAYS.map((day, idx) => {
+                    const dateObj = addDays(weekStartsOn, idx);
+                    const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+                    return (
+                      <th key={`date-${day}`} colSpan={7} className="border border-slate-300 bg-white p-1 text-center text-sm">
+                        {dateStr}
+                      </th>
+                    );
+                  })}
+                </tr>
+                {/* 2 Row: Days */}
+                <tr>
+                  <th className="w-[40px] border border-slate-300 bg-slate-100 p-1 text-center sticky left-0 z-40">번호</th>
+                  <th className="w-[80px] border border-slate-300 bg-slate-100 p-1 text-center sticky left-[40px] z-40">교사</th>
+                  {DAYS.map(day => (
+                    <th key={`day-${day}`} colSpan={7} className="border border-slate-300 bg-slate-100 p-1 text-center">
+                      {day}
+                    </th>
+                  ))}
+                </tr>
+                {/* 3 Row: Periods */}
+                <tr>
+                  <th className="border border-slate-300 bg-slate-100 sticky left-0 z-40 h-6"></th>
+                  <th className="border border-slate-300 bg-slate-100 sticky left-[40px] z-40 h-6"></th>
+                  {DAYS.map(day => (
+                    PERIODS.map(period => (
+                      <th key={`period-${day}-${period}`} className="w-[45px] border border-slate-300 bg-white text-center font-normal">
+                        {period}
+                      </th>
+                    ))
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={37} className="py-20 text-center bg-white border border-slate-300">
+                      <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                        <span className="text-sm font-semibold text-slate-500">데이터를 불러오는 중...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : allTimetables.length === 0 ? (
+                  <tr>
+                    <td colSpan={37} className="py-20 text-center text-slate-400 font-bold bg-white border border-slate-300">데이터가 없습니다.</td>
+                  </tr>
+                ) : (
+                  allTimetables.map((t, index) => {
+                    const isMe = t.id === user?.uid;
+                    return (
+                      <tr key={t.id} className="hover:bg-blue-50/30">
+                        {/* Number */}
+                        <td className="border border-slate-300 text-center font-medium text-slate-600 bg-white sticky left-0 z-20">
+                          {index + 1}
+                        </td>
+                        {/* Teacher Name */}
+                        <td className={`border border-slate-300 text-center font-bold px-1 sticky left-[40px] z-20 ${isMe ? 'bg-blue-50 text-blue-700' : 'bg-white text-slate-800'}`}>
+                          {t.teacherName}
+                        </td>
+                        {/* Slots */}
+                        {DAYS.map((day) => {
+                          const daySched = t.schedule.find(s => s.dayOfWeek === day);
+                          return PERIODS.map((period) => {
+                            const slot = daySched?.slots.find(s => s.period === period);
+                            const isSelected = selection?.teacherId === t.id && selection?.dayOfWeek === day && selection?.period === period;
+                            const hasClass = !!slot?.subject;
+                            let cellBg = 'bg-white';
+                            
+                            if (isSelected) {
+                              cellBg = 'bg-blue-100 outline outline-2 outline-blue-500 z-10';
+                            } else if (selection) {
+                                // 내가 뭔가를 선택했을 때, 상대방의 수업 셀은 호버 효과 제공 (시각적 힌트)
+                                if (!isMe && hasClass) cellBg = 'bg-white hover:bg-slate-100 cursor-pointer';
+                                if (isMe && hasClass) cellBg = 'bg-slate-50/50 cursor-pointer'; // 다른 나의 수업들
+                            } else if (isMe && hasClass) {
+                                cellBg = 'bg-blue-50/50 hover:bg-blue-100 cursor-pointer';
+                            } else if (!isMe && hasClass) {
+                                cellBg = 'bg-white cursor-default'; // 상대방 수업 클릭 불가 (내 수업 먼저 선택 안했을시)
+                                // 단, 상호공강 확인을 위해 상대방 수업 클릭하면 먼저 내꺼 선택하라고 alert 뜨도록 클릭이벤트는 항상 열어둠
+                                cellBg = 'bg-white hover:bg-slate-50 cursor-pointer';
+                            }
+
+                            return (
+                              <td 
+                                key={`${t.id}-${day}-${period}`}
+                                onClick={() => handleCellClick(t, day, period, slot)}
+                                className={`border border-slate-300 p-0 text-center relative font-sans ${cellBg}`}
+                                style={{ height: '42px', verticalAlign: 'middle', userSelect: 'none' }}
+                              >
+                                {hasClass ? (
+                                  <div className="flex flex-col items-center justify-center w-full h-full px-0.5 leading-[1.2]">
+                                    <div className={`font-bold text-[11px] truncate w-full ${isSelected ? 'text-blue-800' : (slot.subject === '역사' || slot.subject === '도덕' || slot.subject === '체육' ? 'text-blue-600' : slot.subject === '과학' || slot.subject === '기술가정' ? 'text-red-600' : 'text-slate-800')}`}>
+                                      {slot.subject}
+                                    </div>
+                                    <div className="text-[10px] font-medium text-slate-600 truncate w-full mt-[1px]">
+                                      {slot.gradeClass}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </td>
+                            );
+                          })
+                        })}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      {/* Transaction Overlay */}
+      {processing && (
+        <div className="fixed inset-0 bg-slate-900/20 z-[100] flex items-center justify-center">
+          <div className="bg-white p-6 rounded-xl shadow-xl border border-slate-200 flex items-center gap-4">
+            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+            <span className="font-bold text-slate-800">교체 트랜잭션 진행 중...</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default GlobalTimetablePage;

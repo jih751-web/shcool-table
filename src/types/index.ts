@@ -1,0 +1,79 @@
+export interface Teacher {
+  uid: string;
+  name: string;
+  email: string;
+}
+
+export interface ClassSlot {
+  period: number; // 교시 (1~8 등)
+  subject: string; // 과목명
+  gradeClass: string; // 학년/반 (예: 1-1)
+}
+
+export interface DaySchedule {
+  dayOfWeek: string; // "월", "화", "수", "목", "금"
+  slots: ClassSlot[];
+}
+
+export interface Timetable {
+  id: string; // 데이터베이스 식별자 (교사의 uid와 동일하게 관리)
+  teacherName: string;
+  email: string;
+  schedule: DaySchedule[];
+}
+
+export interface SchoolEvent {
+  id?: string;
+  date: string; // YYYY-MM-DD
+  periodStart: number;
+  periodEnd: number;
+  description: string;
+  announcement?: string; // Phase 9: 추가 전달사항 (상세 메모)
+  type: 'EXTERNAL' | 'CURRICULUM';
+}
+
+export interface SpecialRoom {
+  id: string;
+  name: string;
+}
+
+export interface RoomBooking {
+  id?: string;
+  roomId: string;
+  roomName: string;
+  teacherId: string;
+  teacherName: string;
+  date: string;
+  period: number;
+  createdAt: string;
+}
+
+export interface ReplacementRecord {
+  id?: string;
+  requestorId: string;
+  requestorName: string;
+  targetId: string;
+  targetName: string;
+  date: string; // 교체할 일자 YYYY-MM-DD
+  period: number; // 교체할 교시
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string; // ISO string
+}
+
+export interface AppNotification {
+  id?: string;
+  targetUserId: string;
+  message: string;
+  timestamp: string; // ISO string
+  isRead: boolean;
+  type: 'REPLACEMENT_REQUEST' | 'REPLACEMENT_APPROVED';
+}
+
+// Phase 6 신규: 일일 변동 시간표 (특정 날짜의 기초 시간표를 덮어씀)
+export interface Override {
+  id?: string; // 문서 ID: 보통 teacherId_YYYY-MM-DD 형태
+  teacherId: string;
+  teacherName: string; // 조회를 편하게 하기 위함
+  date: string; // YYYY-MM-DD
+  slots: ClassSlot[]; // 해당 날짜의 전체(1~7교시) 스케줄
+}
