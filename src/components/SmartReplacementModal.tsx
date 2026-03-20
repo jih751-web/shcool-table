@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, ArrowRightLeft, Search, CheckCircle2, RotateCcw, Users, CalendarDays } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -45,7 +45,7 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
           ttSnap.forEach(doc => {
              const data = doc.data() as Timetable;
              if (myTimetable && doc.id !== myTimetable.id) {
-               tList.push({ id: doc.id, ...data });
+               tList.push({ ...data, id: doc.id });
              }
           });
           tList.sort((a, b) => a.teacherName.localeCompare(b.teacherName));

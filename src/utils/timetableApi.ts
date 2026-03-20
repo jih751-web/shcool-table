@@ -1,7 +1,6 @@
 import { collection, doc, getDocs, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Timetable, Override, ClassSlot } from '../types';
-import { format } from 'date-fns';
 
 /**
  * 기초 시간표(Base)를 건드리지 않고, 특정 날짜의 오버라이드(Override)를 사용하여 트랜잭션 교체를 수행합니다.
