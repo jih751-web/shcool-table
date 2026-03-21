@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, ArrowRightLeft, Search, CheckCircle2, RotateCcw, Users, CalendarDays } from 'lucide-react';
+import { X, ArrowRightLeft, Search, CheckCircle2, RotateCcw, Users, CalendarDays, UserPlus } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import type { Timetable, Override, ClassSlot } from '../types';
-import { executeSwapTransaction } from '../utils/timetableApi';
+import { executeSwapTransaction, executeMakeupTransaction } from '../utils/timetableApi';
 import { addDays, format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -12,6 +12,7 @@ interface Props {
   onClose: () => void;
   sourceSlot: { date: string; dayOfWeek: string; period: number; subject: string; gradeClass: string } | null;
   myTimetable: Timetable | null;
+  initialMode?: 'SWAP' | 'MAKEUP';
 }
 
 interface GlobalSlot {
@@ -24,7 +25,10 @@ interface GlobalSlot {
   gradeClass: string;
 }
 
-export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myTimetable }: Props) {
+import { useAuth } from '../contexts/AuthContext';
+
+export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myTimetable, initialMode }: Props) {
+  const { userProfiles } = useAuth();
   const [teachers, setTeachers] = useState<Timetable[]>([]);
   const [overrides, setOverrides] = useState<Override[]>([]);
   
@@ -32,6 +36,7 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [mode, setMode] = useState<'SWAP' | 'MAKEUP'>('SWAP');
 
   // 1. 기초 시간표 및 오버라이드 한 번에 패치 (+14일 범위)
   useEffect(() => {
@@ -71,16 +76,15 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
       fetchData();
       setSelectedGlobalSlot(null);
       setSearchQuery('');
+      setMode(initialMode || 'SWAP');
     }
-  }, [isOpen, sourceSlot, myTimetable]);
+  }, [isOpen, sourceSlot, myTimetable, initialMode]);
 
   // 헬퍼: 특정 교사, 특정 날짜, 특정 요일의 7교시 스케줄 병합 반환
   const getDailySchedule = (tId: string, searchDate: string, searchDayOfWeek: string, tData: Timetable | null): ClassSlot[] => {
-    // 1. 해당 날짜 오버라이드 확인
     const ov = overrides.find(o => o.teacherId === tId && o.date === searchDate);
     if (ov) return ov.slots;
 
-    // 2. 오버라이드 없으면 기초 시간표 요일 환산
     if (tData) {
       if (searchDayOfWeek === '토' || searchDayOfWeek === '일') {
          return [1,2,3,4,5,6,7].map(p => ({ period: p, subject: '', gradeClass: '' }));
@@ -92,61 +96,73 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
     return [1,2,3,4,5,6,7].map(p => ({ period: p, subject: '', gradeClass: '' }));
   };
 
-  // 2. 14일 전수 스캔 (상호 공강 필터링)
-  const globalAvailableSlots = useMemo(() => {
+  /**
+   * 보강(Makeup) 가능 목록 스캔: 
+   * '해당 날짜/교시'에 상대방 교사가 수업이 없는가(공강인가)?
+   */
+  const makeupAvailableSlots = useMemo(() => {
     if (!sourceSlot || !myTimetable || teachers.length === 0) return [];
     
     const validSlots: GlobalSlot[] = [];
+    const targetDateStr = sourceSlot.date;
+    const targetDayOfWeek = sourceSlot.dayOfWeek;
 
-    // source date string & JS Date
+    teachers.forEach(target => {
+      const tarDaySlots = getDailySchedule(target.id!, targetDateStr, targetDayOfWeek, target);
+      const tarSlot = tarDaySlots.find(s => s.period === sourceSlot.period);
+
+      // 상대방의 해당 교시가 '공강'인 경우에만 보강 가능 대상으로 리스트업
+      if (!tarSlot || !tarSlot.subject) {
+        validSlots.push({
+          teacherId: target.id!,
+          teacherName: target.teacherName,
+          date: targetDateStr,
+          dayOfWeek: targetDayOfWeek,
+          period: sourceSlot.period,
+          subject: '(보강 가능)', 
+          gradeClass: '해당 교시 공강'
+        });
+      }
+    });
+
+    return validSlots;
+  }, [sourceSlot, myTimetable, teachers, overrides]);
+
+  /**
+   * 교체(Swap) 14일 전수 스캔 (기착 공강 매칭)
+   */
+  const swapAvailableSlots = useMemo(() => {
+    if (!sourceSlot || !myTimetable || teachers.length === 0) return [];
+    
+    const validSlots: GlobalSlot[] = [];
     const reqBaseDateStr = sourceSlot.date;
     const reqBaseDateObj = new Date(reqBaseDateStr);
 
-    // 나(요청자)의 Source Date 시간표 확인
     const mySourceDaySlots = getDailySchedule(myTimetable.id!, reqBaseDateStr, sourceSlot.dayOfWeek, myTimetable);
     const mySourceSlotData = mySourceDaySlots.find(s => s.period === sourceSlot.period);
-    // 만약 이미 내 원본 수업이 공강 처리되어 있다면 교체 불가
     if (!mySourceSlotData || !mySourceSlotData.subject) return [];
 
-    // 향후 14일 리스트 생성
     const dateRange = Array.from({length: 15}, (_, i) => {
       const d = addDays(reqBaseDateObj, i);
       const str = format(d, 'yyyy-MM-dd');
       const dow = format(d, 'E', { locale: ko });
       return { dateStr: str, dayOfWeek: dow };
-    }).filter(d => d.dayOfWeek !== '토' && d.dayOfWeek !== '일'); // 주말 제외
+    }).filter(d => d.dayOfWeek !== '토' && d.dayOfWeek !== '일');
 
-    // 모든 선생님 순회
     teachers.forEach(target => {
-      // -------------------------------------------------------------
-      // 조건 1: 상대방 선생님은 나의 원본 수업 시간(Date A, Period A)에 공강인가?
-      // -------------------------------------------------------------
       const tarSourceDaySlots = getDailySchedule(target.id!, reqBaseDateStr, sourceSlot.dayOfWeek, target);
       const tarSourceSlotData = tarSourceDaySlots.find(s => s.period === sourceSlot.period);
-      
-      // 상대가 해당 시간에 이미 수업이 있다면 아예 이 상대와는 교체 불가!
       if (tarSourceSlotData && tarSourceSlotData.subject) return; 
 
-      // -------------------------------------------------------------
-      // 조건 2: 상대방 선생님의 미래 수업들(Date B, Period B) 중에, 
-      // 나(요청자)가 공강인 시간이 있는지 전수 스캔
-      // -------------------------------------------------------------
       dateRange.forEach(targetDateObj => {
-        // 상대방 타겟 데이 스케줄
         const tarTargetDaySlots = getDailySchedule(target.id!, targetDateObj.dateStr, targetDateObj.dayOfWeek, target);
-        // 나의 타겟 데이 스케줄
         const myTargetDaySlots = getDailySchedule(myTimetable.id!, targetDateObj.dateStr, targetDateObj.dayOfWeek, myTimetable);
 
         [1, 2, 3, 4, 5, 6, 7].forEach(p => {
           const tarTargSlotData = tarTargetDaySlots.find(s => s.period === p);
           const myTargSlotData = myTargetDaySlots.find(s => s.period === p);
-
-          // 상대방은 해당 슬롯에 수업이 존재하고 && 나는 그 슬롯에 비어있어야 함(공강)
           if ((tarTargSlotData && tarTargSlotData.subject) && (!myTargSlotData || !myTargSlotData.subject)) {
-             
-             // 추가 조건: source -> source 매핑 방지 (자기 자신과 교환하는 로직 제외)
              if (targetDateObj.dateStr === sourceSlot.date && p === sourceSlot.period) return;
-
              validSlots.push({
                teacherId: target.id!,
                teacherName: target.teacherName,
@@ -161,7 +177,6 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
       });
     });
 
-    // 날짜 오름차순, 교시 오름차순으로 정렬
     validSlots.sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date);
       return a.period - b.period;
@@ -170,34 +185,47 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
     return validSlots;
   }, [sourceSlot, myTimetable, teachers, overrides]);
 
+  const currentAvailableSlots = mode === 'SWAP' ? swapAvailableSlots : makeupAvailableSlots;
+
   const filteredSlots = useMemo(() => {
-    if (!searchQuery) return globalAvailableSlots;
-    return globalAvailableSlots.filter(s => 
+    if (!searchQuery) return currentAvailableSlots;
+    return currentAvailableSlots.filter(s => 
       s.teacherName.includes(searchQuery) || 
       s.subject.includes(searchQuery) ||
       s.date.includes(searchQuery)
     );
-  }, [globalAvailableSlots, searchQuery]);
+  }, [currentAvailableSlots, searchQuery]);
 
   const handleConfirm = async () => {
     if (!myTimetable || !sourceSlot || !selectedGlobalSlot) return;
 
     setProcessing(true);
     try {
-      await executeSwapTransaction(
-        myTimetable.id!,
-        selectedGlobalSlot.teacherId,
-        sourceSlot.date,
-        sourceSlot.dayOfWeek,
-        sourceSlot.period,
-        selectedGlobalSlot.date,
-        selectedGlobalSlot.dayOfWeek,
-        selectedGlobalSlot.period
-      );
-      alert('성공적으로 변동(Override) 교체가 완료되었습니다.');
+      if (mode === 'SWAP') {
+        await executeSwapTransaction(
+          myTimetable.id!,
+          selectedGlobalSlot.teacherId,
+          sourceSlot.date,
+          sourceSlot.dayOfWeek,
+          sourceSlot.period,
+          selectedGlobalSlot.date,
+          selectedGlobalSlot.dayOfWeek,
+          selectedGlobalSlot.period
+        );
+        alert('성공적으로 변동(Override) 교체가 완료되었습니다.');
+      } else {
+        await executeMakeupTransaction(
+          myTimetable.id!,
+          selectedGlobalSlot.teacherId,
+          sourceSlot.date,
+          sourceSlot.dayOfWeek,
+          sourceSlot.period
+        );
+        alert('성공적으로 보강(Makeup) 처리가 완료되었습니다.');
+      }
       onClose();
     } catch (error: any) {
-      alert(`교체 실패: ${error.message}`);
+      alert(`처리 실패: ${error.message}`);
     } finally {
       setProcessing(false);
     }
@@ -214,7 +242,7 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
         <div className="bg-brand-600 px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-white">
             <CalendarDays className="w-5 h-5" />
-            <h2 className="text-xl font-bold">향후 14일 스마트 자동 매칭 (전체 교사 대상)</h2>
+            <h2 className="text-xl font-bold">시간표 변경 요청</h2>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition-colors text-white">
             <X className="w-6 h-6" />
@@ -223,21 +251,34 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
 
         <div className="p-6 overflow-y-auto flex-1 bg-slate-50 flex flex-col gap-6">
           
+          {/* Mode Switch Tab */}
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner w-fit">
+            <button 
+              onClick={() => { setMode('SWAP'); setSelectedGlobalSlot(null); }}
+              className={`flex items-center gap-2 px-6 py-2.5 text-[15px] font-black rounded-xl transition-all duration-200 ${mode === 'SWAP' ? 'bg-white text-brand-700 shadow-lg border border-brand-200 ring-2 ring-brand-500/10' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              <ArrowRightLeft className="w-4 h-4" /> 14일 스마트 교체
+            </button>
+            <button 
+              onClick={() => { setMode('MAKEUP'); setSelectedGlobalSlot(null); }}
+              className={`flex items-center gap-2 px-6 py-2.5 text-[15px] font-black rounded-xl transition-all duration-200 ${mode === 'MAKEUP' ? 'bg-white text-orange-600 shadow-lg border border-orange-200 ring-2 ring-orange-500/10' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              <UserPlus className="w-4 h-4" /> 보강 요청 (단방향)
+            </button>
+          </div>
+
           {/* Source Info (Banner) */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="absolute top-0 left-0 w-2 h-full bg-brand-500"></div>
+          <div className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+            <div className={`absolute top-0 left-0 w-2 h-full ${mode === 'SWAP' ? 'bg-brand-500' : 'bg-orange-500'}`}></div>
             <div className="pl-4">
-               <p className="text-sm font-bold text-slate-500 mb-1">변경할 나의 수업 (원본)</p>
+               <p className="text-sm font-bold text-slate-500 mb-1">나의 원본 수업</p>
                <h3 className="text-xl font-black text-slate-800 tracking-tight flex flex-wrap items-center gap-x-2 gap-y-1">
-                 <span className="text-brand-600 bg-brand-50 px-2 py-0.5 rounded-md text-lg">
+                 <span className={`${mode === 'SWAP' ? 'text-brand-600 bg-brand-50' : 'text-orange-600 bg-orange-50'} px-2 py-0.5 rounded-md text-lg`}>
                     {sourceSlot.date} ({sourceSlot.dayOfWeek}) {sourceSlot.period}교시
                  </span>
                  <ArrowRightLeft className="w-4 h-4 text-slate-300 mx-1 hidden sm:block" /> 
                  {sourceSlot.subject} <span className="text-sm text-slate-400 font-bold ml-1">({sourceSlot.gradeClass})</span>
                </h3>
-            </div>
-            <div className="hidden sm:flex items-center justify-center w-12 h-12 rounded-full bg-brand-50 text-brand-600 shrink-0">
-               <Users className="w-6 h-6" />
             </div>
           </div>
 
@@ -245,16 +286,19 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
           <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                   <h3 className="font-bold text-slate-800">14일 내 교차 공강 일치 목록 <span className="text-brand-600">({globalAvailableSlots.length}건 발견)</span></h3>
+                   <div className={`w-2 h-2 rounded-full animate-pulse ${mode === 'SWAP' ? 'bg-emerald-500' : 'bg-orange-500'}`}></div>
+                   <h3 className="font-bold text-slate-800">
+                     {mode === 'SWAP' ? '14일 내 교차 공강 일치 목록' : '해당 교시에 수업이 없는 교사 목록'}
+                     <span className={mode === 'SWAP' ? 'text-brand-600' : 'text-orange-600'}> ({currentAvailableSlots.length}건 발견)</span>
+                   </h3>
                 </div>
                 
-                {!loading && globalAvailableSlots.length > 0 && (
+                {!loading && currentAvailableSlots.length > 0 && (
                    <div className="relative w-full md:w-64">
                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                      <input 
                         type="text"
-                        placeholder="교사명, 날짜 검색..."
+                        placeholder="교사명 검색..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -266,14 +310,13 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
              {loading ? (
                 <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 text-slate-500 shadow-sm">
                    <RotateCcw className="w-8 h-8 animate-spin text-brand-500 mb-3" /> 
-                   <p className="font-bold">시스템이 14일간의 변동 시간표 내역을 머지 스캔 중입니다...</p>
-                   <p className="text-sm mt-1 text-slate-400">데이터가 많을 경우 약간의 시간이 소요될 수 있습니다.</p>
+                   <p className="font-bold">데이터를 스캔 중입니다...</p>
                 </div>
-             ) : globalAvailableSlots.length === 0 ? (
+             ) : currentAvailableSlots.length === 0 ? (
                 <div className="bg-slate-100 text-slate-500 p-8 rounded-2xl border border-slate-200 text-center flex flex-col items-center justify-center shadow-inner">
                    <X className="w-10 h-10 text-slate-300 mb-2" />
-                   <p className="font-bold text-lg mb-1">상호 공강 일치 내역이 0건입니다.</p>
-                   <p className="text-sm border-t border-slate-200 pt-3 mt-3 w-3/4">선생님이 요구하신 원본 수업의 해당 시간에 쉬는 교사가 아예 없거나, 혹시 쉬더라도 해당 교사의 향후 14일 수업 중 선생님이 쉬는 빈 틈새가 완벽히 매칭되지 않았습니다.</p>
+                   <p className="font-bold text-lg mb-1">{mode === 'SWAP' ? '상호 공강 일치 내역이 0건입니다.' : '보강 가능한 교사가 없습니다.'}</p>
+                   {mode === 'SWAP' && <p className="text-sm border-t border-slate-200 pt-3 mt-3 w-3/4">선생님이 요구하신 원본 수업의 해당 시간에 쉬는 교사가 아예 없거나, 빈 틈새가 완벽히 매칭되지 않았습니다.</p>}
                 </div>
              ) : filteredSlots.length === 0 ? (
                 <div className="bg-white text-slate-500 p-8 rounded-2xl border border-slate-200 text-center">
@@ -283,10 +326,9 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 overflow-y-auto pr-2 custom-scrollbar min-h-[300px] max-h-[500px]">
                    {filteredSlots.map((slot, idx) => {
                      const isSelected = selectedGlobalSlot?.teacherId === slot.teacherId && 
-                                        selectedGlobalSlot?.date === slot.date && 
-                                        selectedGlobalSlot?.period === slot.period;
+                                         selectedGlobalSlot?.date === slot.date && 
+                                         selectedGlobalSlot?.period === slot.period;
                      
-                     // 날짜 예쁘게 포맷팅
                      const dObj = new Date(slot.date);
                      const dStrDesc = format(dObj, 'M월 d일') + ` (${slot.dayOfWeek})`;
 
@@ -295,30 +337,32 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
                          key={idx}
                          onClick={() => setSelectedGlobalSlot(slot)}
                          className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between min-h-[140px] relative overflow-hidden ${
-                           isSelected ? 'border-brand-500 bg-brand-50 shadow-md transform scale-[1.02]' : 'border-slate-200 bg-white hover:border-brand-300 hover:shadow-sm'
-                         }`}
+                           isSelected 
+                             ? (mode === 'SWAP' ? 'border-brand-500 bg-brand-50 shadow-md' : 'border-orange-500 bg-orange-50 shadow-md') 
+                             : 'border-slate-200 bg-white hover:border-brand-300 hover:shadow-sm'
+                         } transform ${isSelected ? 'scale-[1.02]' : 'scale-100'}`}
                        >
-                          {isSelected && <div className="absolute top-0 right-0 w-8 h-8 bg-brand-500 rounded-bl-2xl flex items-center justify-center text-white"><CheckCircle2 className="w-4 h-4" /></div>}
+                          {isSelected && <div className={`absolute top-0 right-0 w-8 h-8 ${mode === 'SWAP' ? 'bg-brand-500' : 'bg-orange-500'} rounded-bl-2xl flex items-center justify-center text-white`}><CheckCircle2 className="w-4 h-4" /></div>}
                           <div>
                              <div className="flex items-center gap-2 mb-2">
-                                <span className={`text-[11px] font-black px-2 py-0.5 rounded-full ${isSelected ? 'bg-brand-600 text-white' : 'bg-slate-800 text-white'}`}>
-                                   D-{(new Date(slot.date).getTime() - new Date().getTime()) / (1000 * 3600 * 24) > 0 ? Math.floor((new Date(slot.date).getTime() - new Date().getTime()) / (1000 * 3600 * 24)) : 'Day'}
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isSelected ? (mode === 'SWAP' ? 'bg-brand-600' : 'bg-orange-600') : 'bg-slate-800'} text-white`}>
+                                   {mode === 'SWAP' ? `D-${Math.max(0, Math.floor((new Date(slot.date).getTime() - new Date().getTime()) / (1000 * 3600 * 24)))}` : '보강'}
                                 </span>
                                 <span className="text-xs font-bold text-slate-500 tracking-tight">
                                    {dStrDesc} {slot.period}교시
                                 </span>
                              </div>
-                             <p className={`font-black tracking-tight text-xl leading-tight mt-1 ${isSelected ? 'text-brand-900' : 'text-slate-800'}`}>
+                             <p className={`font-black tracking-tight text-xl leading-tight mt-1 ${isSelected ? (mode === 'SWAP' ? 'text-brand-900' : 'text-orange-900') : 'text-slate-800'}`}>
                                {slot.subject}
                              </p>
-                             <p className={`text-sm font-bold mt-1 ${isSelected ? 'text-brand-700' : 'text-slate-500'}`}>
+                             <p className={`text-sm font-bold mt-1 ${isSelected ? (mode === 'SWAP' ? 'text-brand-700' : 'text-orange-700') : 'text-slate-500'}`}>
                                {slot.gradeClass}
                              </p>
                           </div>
-                          <div className={`mt-3 pt-3 border-t text-sm font-bold flex items-center justify-between ${isSelected ? 'border-brand-200 text-brand-800' : 'border-slate-100 text-slate-600'}`}>
+                          <div className={`mt-3 pt-3 border-t text-sm font-bold flex items-center justify-between ${isSelected ? (mode === 'SWAP' ? 'border-brand-200 text-brand-800' : 'border-orange-200 text-orange-800') : 'border-slate-100 text-slate-600'}`}>
                              <div className="flex items-center gap-1.5">
                                 <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px]"><Users className="w-3 h-3 text-slate-500" /></div>
-                                {slot.teacherName} 선생님
+                                {userProfiles[slot.teacherId]?.nickname || slot.teacherName} 선생님
                              </div>
                           </div>
                        </div>
@@ -341,13 +385,17 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
             onClick={handleConfirm}
             disabled={!selectedGlobalSlot || processing}
             className={`px-8 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md
-              ${selectedGlobalSlot && !processing ? 'bg-brand-600 hover:bg-brand-700 text-white hover:shadow-lg' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
+              ${selectedGlobalSlot && !processing 
+                ? (mode === 'SWAP' ? 'bg-brand-600 hover:bg-brand-700 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white') 
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
             `}
           >
             {processing ? (
               <><RotateCcw className="w-5 h-5 animate-spin" /> DB 기록중...</>
-            ) : (
+            ) : mode === 'SWAP' ? (
               <><CheckCircle2 className="w-5 h-5" /> 이 수업으로 교환하기</>
+            ) : (
+              <><UserPlus className="w-5 h-5" /> 보강 요청 확정</>
             )}
           </button>
         </div>

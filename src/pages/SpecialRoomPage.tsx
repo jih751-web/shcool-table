@@ -19,10 +19,10 @@ interface BookingCellProps {
   date: string;
   period: number;
   globalBooking: RoomBooking | undefined;
-  user: any;
 }
 
-const BookingCell = memo(({ roomId, roomName, date, period, globalBooking, user }: BookingCellProps) => {
+const BookingCell = memo(({ roomId, roomName, date, period, globalBooking }: BookingCellProps) => {
+  const { user, userData, userProfiles } = useAuth();
   const [optimisticBooking, setOptimisticBooking] = useState<RoomBooking | null | undefined>(undefined);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
@@ -68,8 +68,8 @@ const BookingCell = memo(({ roomId, roomName, date, period, globalBooking, user 
       const newBooking: RoomBooking = {
         roomId,
         roomName,
-        teacherId: user?.uid,
-        teacherName: user?.displayName || user?.email?.split('@')[0] || '선생님',
+        teacherId: user?.uid || '',
+        teacherName: userData?.nickname || user?.displayName || user?.email?.split('@')[0] || '선생님',
         date,
         period,
         createdAt: new Date().toISOString()
@@ -106,7 +106,7 @@ const BookingCell = memo(({ roomId, roomName, date, period, globalBooking, user 
         ) : displayBooking ? (
           <>
             <span className={`font-black text-[14.5px] leading-tight break-all ${isMyBooking ? 'text-brand-900' : 'text-slate-700'}`}>
-              {displayBooking.teacherName}
+              {userProfiles[displayBooking.teacherId]?.nickname || displayBooking.teacherName}
             </span>
             {isMyBooking && (
               <span className="text-[10px] font-black text-white bg-brand-500 px-2 py-0.5 rounded shadow-sm mt-2 flex items-center gap-1 animate-in zoom-in-0 duration-300">
@@ -134,7 +134,6 @@ const BookingCell = memo(({ roomId, roomName, date, period, globalBooking, user 
 
 // --- 2. 메인 페이지 컴포넌트 ---
 const SpecialRoomPage: React.FC = () => {
-  const { user } = useAuth();
   const [rooms, setRooms] = useState<SpecialRoom[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<string>('');
   const [bookingsMap, setBookingsMap] = useState<Record<string, RoomBooking>>({});
@@ -336,7 +335,6 @@ const SpecialRoomPage: React.FC = () => {
                         date={targetDate}
                         period={period}
                         globalBooking={bookingsMap[key]}
-                        user={user}
                       />
                     );
                   })}

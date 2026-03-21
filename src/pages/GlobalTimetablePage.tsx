@@ -12,7 +12,7 @@ const DAYS = ['월', '화', '수', '목', '금'];
 const PERIODS = [1, 2, 3, 4, 5, 6, 7];
 
 const GlobalTimetablePage: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, userProfiles, logout } = useAuth();
   const [allTimetables, setAllTimetables] = useState<Timetable[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -227,7 +227,7 @@ const GlobalTimetablePage: React.FC = () => {
                         </td>
                         {/* Teacher Name */}
                         <td className={`border border-slate-300 text-center font-bold px-1 sticky left-[40px] z-20 ${isMe ? 'bg-blue-50 text-blue-700' : 'bg-white text-slate-800'}`}>
-                          {t.teacherName}
+                          {userProfiles[t.id]?.nickname || t.teacherName}
                         </td>
                         {/* Slots */}
                         {DAYS.map((day) => {

@@ -2,6 +2,7 @@ export interface Teacher {
   uid: string;
   name: string;
   email: string;
+  nickname?: string;
 }
 
 export interface ClassSlot {
@@ -50,14 +51,17 @@ export interface RoomBooking {
 
 export interface ReplacementRecord {
   id?: string;
+  type: 'SWAP' | 'MAKEUP';
   requestorId: string;
   requestorName: string;
   targetId: string;
   targetName: string;
-  date: string; // 교체할 일자 YYYY-MM-DD
-  period: number; // 교체할 교시
+  sourceDate: string; // YYYY-MM-DD
+  sourcePeriod: number;
+  targetDate?: string; // YYYY-MM-DD (보강의 경우 소스 일자와 동일하므로 생략 가능하나 기록용)
+  targetPeriod?: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  createdAt: string; // ISO string
+  timestamp: string; // ISO string
 }
 
 export interface AppNotification {
@@ -76,4 +80,14 @@ export interface Override {
   teacherName: string; // 조회를 편하게 하기 위함
   date: string; // YYYY-MM-DD
   slots: ClassSlot[]; // 해당 날짜의 전체(1~7교시) 스케줄
+}
+
+export interface Todo {
+  id?: string;
+  userId: string;
+  text: string;
+  date: string; // YYYY-MM-DD
+  isCompleted: boolean;
+  isStarred: boolean;
+  timestamp: any;
 }

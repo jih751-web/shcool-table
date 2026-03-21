@@ -1,17 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X } from 'lucide-react';
+import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Loader2, Paperclip, Send, Bot } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot, collection, getDocs, writeBatch, query, where } from 'firebase/firestore';
-import type { Timetable, ClassSlot, Override, SchoolEvent } from '../types';
+import { doc, onSnapshot, collection, getDocs, writeBatch, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import type { Timetable, ClassSlot, Override, SchoolEvent, Todo } from '../types';
 import { Link } from 'react-router-dom';
 import SmartReplacementModal from '../components/SmartReplacementModal';
 import { addDays, subDays, format, isToday } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import NicknameModal from '../components/NicknameModal';
 
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user, userData, logout } = useAuth();
   const [baseTimetable, setBaseTimetable] = useState<Timetable | null>(null);
   const [overrideData, setOverrideData] = useState<Override | null>(null);
   const [dailyEvents, setDailyEvents] = useState<SchoolEvent[]>([]);
@@ -20,6 +21,11 @@ export default function DashboardPage() {
   const [isEventDetailOpen, setIsEventDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   
+  // 급식 상태
+  const [mealData, setMealData] = useState<{ type: string; items: string[] }[]>([]);
+  const [isMealLoading, setIsMealLoading] = useState(false);
+  const [mealError, setMealError] = useState<string | null>(null);
+  
   // 기준 날짜 상태 (기본값: 오늘)
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const currentDateStr = format(currentDate, 'yyyy-MM-dd');
@@ -27,8 +33,58 @@ export default function DashboardPage() {
 
   // 모달 및 드롭다운 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isChoiceOpen, setIsChoiceOpen] = useState(false);
+  const [initialMode, setInitialMode] = useState<'SWAP' | 'MAKEUP'>('SWAP');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{dayOfWeek: string, period: number, subject: string, gradeClass: string, date: string} | null>(null);
+
+  // Todo 상태
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todoInput, setTodoInput] = useState('');
+  const [isTodoLoading, setIsTodoLoading] = useState(false);
+
+  // AI Assistant 상태
+  const [chatMessages, setChatMessages] = useState<{id: string, text: string, isUser: boolean, timestamp: Date}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiTyping, setIsAiTyping] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatMessages, isAiTyping]);
+
+  const handleSendChatMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isAiTyping) return;
+
+    const newUserMsg = {
+      id: Date.now().toString(),
+      text: chatInput.trim(),
+      isUser: true,
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, newUserMsg]);
+    setChatInput('');
+    setIsAiTyping(true);
+
+    // Mock AI Response
+    setTimeout(() => {
+      const newAiMsg = {
+        id: (Date.now() + 1).toString(),
+        text: "문서 내용을 분석하여 답변을 준비 중입니다...\n(현재는 UI 테스트 모드입니다)",
+        isUser: false,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, newAiMsg]);
+      setIsAiTyping(false);
+    }, 1000);
+  };
 
   // 1. 기초 시간표(Base) 실시간 구독
   useEffect(() => {
@@ -39,6 +95,8 @@ export default function DashboardPage() {
       } else {
         setBaseTimetable(null);
       }
+    }, (error) => {
+      console.error("Base timetable error:", error);
     });
     return () => unsubBase();
   }, [user]);
@@ -54,6 +112,9 @@ export default function DashboardPage() {
       } else {
         setOverrideData(null);
       }
+      setLoading(false);
+    }, (error) => {
+      console.error("Override error:", error);
       setLoading(false);
     });
     return () => unsubOverride();
@@ -94,6 +155,138 @@ export default function DashboardPage() {
     return () => unsubEvents();
   }, [currentDateStr]);
 
+  // 4. NEIS 급식 데이터 가져오기
+  useEffect(() => {
+    const fetchMealData = async () => {
+      setIsMealLoading(true);
+      setMealError(null);
+      setMealData([]);
+      try {
+        const dateParam = currentDateStr.replace(/-/g, '');
+        // 경상북도교육청(R10), 울릉중학교(8981025)
+        const response = await fetch(`https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&ATPT_OFCDC_SC_CODE=R10&SD_SCHUL_CODE=8981025&MLSV_YMD=${dateParam}`);
+        const data = await response.json();
+        
+        if (data.mealServiceDietInfo && data.mealServiceDietInfo[1].row) {
+          const meals = data.mealServiceDietInfo[1].row
+            .filter((rowItem: any) => rowItem.MMEAL_SC_NM.includes('중식') || rowItem.MMEAL_SC_NM.includes('석식'))
+            .map((rowItem: any) => {
+              const rawMeal = rowItem.DDISH_NM;
+              // 알레르기 번호 제거, 정규식으로 <br/> 처리
+              const parsed = rawMeal
+                .replace(/[0-9.]/g, '') // 숫자 및 마침표 제거
+                .replace(/\(\)/g, '')   // 빈 괄호 제거
+                .replace(/\s+/g, ' ')   // 다중 공백 단일 공백으로
+                .split(/<br\s*\/?>/i)   // 줄바꿈 기준으로 배열화
+                .map((item: string) => item.trim())
+                .filter((item: string) => item.length > 0);
+                
+              return {
+                type: rowItem.MMEAL_SC_NM,
+                items: parsed
+              };
+            });
+
+          if (meals.length > 0) {
+            setMealData(meals);
+          } else {
+            setMealError('예정된 중식/석식이 없습니다.');
+          }
+        } else {
+          // 급식이 없는 날
+          setMealError('예정된 중식/석식이 없습니다.');
+        }
+      } catch (err) {
+        setMealError('급식 정보를 불러오는데 실패했습니다.');
+      } finally {
+        setIsMealLoading(false);
+      }
+    };
+
+    fetchMealData();
+  }, [currentDateStr]);
+
+  // 5. 할 일 목록(Todo) 실시간 구독
+  useEffect(() => {
+    if (!user) return;
+    setIsTodoLoading(true);
+
+    // 조건: 내 할 일 AND 완료되지 않음
+    // 인덱스 에러 방지를 위해 쿼리를 단순화하고 클라이언트에서 필터링함 (date/isStarred/orderBy)
+    const q = query(
+      collection(db, 'todos'),
+      where('userId', '==', user.uid),
+      where('isCompleted', '==', false)
+    );
+
+    const unsubTodos = onSnapshot(q, (snapshot) => {
+      const items: Todo[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data() as Todo;
+        // 클라이언트 사이드 필터링: (날짜가 같거나 OR 별표가 쳐져 있거나)
+        if (data.date === currentDateStr || data.isStarred) {
+          items.push({ id: docSnap.id, ...data });
+        }
+      });
+      // 기간 내 최신순 정렬 (timestamp 기준)
+      items.sort((a, b) => {
+        const timeA = a.timestamp?.seconds || 0;
+        const timeB = b.timestamp?.seconds || 0;
+        return timeB - timeA;
+      });
+      setTodos(items);
+      setIsTodoLoading(false);
+    }, (error) => {
+      console.error("Todo error:", error);
+      setIsTodoLoading(false);
+    });
+
+    return () => unsubTodos();
+  }, [user, currentDateStr]);
+
+  // Todo Handlers
+  const handleAddTodo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !todoInput.trim()) return;
+
+    try {
+      await addDoc(collection(db, 'todos'), {
+        userId: user.uid,
+        text: todoInput.trim(),
+        date: currentDateStr,
+        isCompleted: false,
+        isStarred: false,
+        timestamp: serverTimestamp()
+      });
+      setTodoInput('');
+    } catch (e) {
+      console.error("Add todo error:", e);
+    }
+  };
+
+  const toggleTodoStar = async (todo: Todo) => {
+    if (!todo.id) return;
+    try {
+      await updateDoc(doc(db, 'todos', todo.id), {
+        isStarred: !todo.isStarred
+      });
+    } catch (e) {
+      console.error("Toggle star error:", e);
+    }
+  };
+
+  const toggleTodoComplete = async (todo: Todo) => {
+    if (!todo.id) return;
+    try {
+      // 즉시 사라지기 전 상태 반영 (UI 피드백)
+      await updateDoc(doc(db, 'todos', todo.id), {
+        isCompleted: true
+      });
+    } catch (e) {
+      console.error("Complete todo error:", e);
+    }
+  };
+
   // Date Navigation Handlers
   const handlePrevDay = () => setCurrentDate(prev => subDays(prev, 1));
   const handleNextDay = () => setCurrentDate(prev => addDays(prev, 1));
@@ -121,6 +314,12 @@ export default function DashboardPage() {
         subject: slot.subject,
         gradeClass: slot.gradeClass || ''
     });
+    setIsChoiceOpen(true);
+  };
+
+  const openSmartModal = (mode: 'SWAP' | 'MAKEUP') => {
+    setInitialMode(mode);
+    setIsChoiceOpen(false);
     setIsModalOpen(true);
   };
 
@@ -199,7 +398,9 @@ export default function DashboardPage() {
                 `}>
                   <Settings className="w-4 h-4" />
                 </div>
-                <span className="text-xs font-black text-slate-600 tracking-tight">{user?.email?.split('@')[0]}</span>
+                <span className="text-xs font-black text-slate-600 tracking-tight">
+                  {userData?.nickname || user?.email?.split('@')[0]}
+                </span>
               </div>
 
               {isSettingsOpen && (
@@ -209,6 +410,14 @@ export default function DashboardPage() {
                     <div className="px-4 py-2 border-b border-slate-50 mb-1">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">나의 설정</p>
                     </div>
+                    
+                    <button 
+                      onClick={() => { setIsNicknameModalOpen(true); setIsSettingsOpen(false); }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" /> 닉네임 설정
+                    </button>
+
                     <Link 
                       to="/mytimetable" 
                       className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
@@ -247,7 +456,7 @@ export default function DashboardPage() {
         <div className="w-full mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">
-              안녕하세요, <span className="text-brand-600">{baseTimetable?.teacherName || '선생님'}</span>!
+              안녕하세요, <span className="text-brand-600">{userData?.nickname || baseTimetable?.teacherName || '선생님'}</span>!
             </h2>
             <p className="text-slate-500 font-medium flex items-center gap-2">
               <Clock className="w-4 h-4" /> 일일 시간표 내역을 탐색하고 교체할 수 있습니다.
@@ -255,11 +464,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 2-Column Layout Container */}
-        <div className="w-full flex flex-col lg:flex-row gap-6 items-start">
+        {/* 3-Column Layout Container */}
+        <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           
-          {/* Left Column: Events Panel (30%) */}
-          <div className="w-full lg:w-[30%] bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col sticky top-24">
+          {/* Column 1: Events & Meal Panel */}
+          <div className="w-full flex flex-col gap-6 sticky lg:top-24">
+            {/* Events Panel */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
             <div className="bg-brand-50 border-b border-brand-100 p-4 flex items-center justify-center gap-2">
               <Calendar className="w-5 h-5 text-brand-600" />
               <h3 className="text-lg font-black text-slate-800 tracking-tight">오늘의 학사일정</h3>
@@ -305,32 +516,80 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+            </div>
+
+            {/* Meal Panel */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col min-h-[300px] max-h-[400px]">
+              <div className="bg-brand-50 border-b border-brand-100 p-4 flex items-center justify-center gap-2 shrink-0">
+                <span className="text-xl">🍱</span>
+                <h3 className="text-lg font-black text-slate-800 tracking-tight">오늘의 급식</h3>
+              </div>
+              <div 
+                className="p-5 flex-1 bg-slate-50/30 overflow-y-auto"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                <style>
+                  {`
+                    .overflow-y-auto::-webkit-scrollbar {
+                      display: none;
+                    }
+                  `}
+                </style>
+                {isMealLoading ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3 min-h-[150px]">
+                    <span className="font-bold animate-pulse text-brand-600">급식 정보를 불러오는 중...</span>
+                  </div>
+                ) : mealError ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3 min-h-[150px]">
+                    <AlertCircle className="w-8 h-8 text-slate-300" />
+                    <p className="text-sm font-bold text-center">{mealError}</p>
+                  </div>
+                ) : mealData.length > 0 ? (
+                  <div className="flex flex-col gap-4">
+                    {mealData.map((meal, idx) => (
+                      <div key={idx} className="flex flex-col gap-2 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                        <span className="text-brand-600 font-black text-sm text-center">[{meal.type}]</span>
+                        <div className="flex flex-col gap-1">
+                          {meal.items.map((item, itemIdx) => (
+                            <p key={itemIdx} className="text-slate-800 font-bold text-center text-[15px]">{item}</p>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
 
-          {/* Right Column: Timeline View (70%) */}
-          <div className="w-full lg:w-[70%] bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col relative min-h-[500px]">
+          {/* Column 2: Timeline & To-Do List */}
+          <div className="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col relative min-h-[500px]">
            
            {/* Date Navigation Bar */}
-           <div className="bg-brand-50 border-b border-brand-100 p-4 flex items-center justify-center gap-4 relative">
-              <button onClick={handlePrevDay} className="p-2 bg-white rounded-full shadow-sm text-brand-600 hover:bg-brand-100 transition-colors">
-                 <ChevronLeft className="w-5 h-5" />
-              </button>
-              
-              <div className="flex flex-col items-center min-w-[200px]">
-                 <span className="text-[11px] font-black text-brand-600 tracking-widest uppercase mb-1">{isToday(currentDate) ? 'TODAY' : 'DATE'}</span>
-                 <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-1.5">
-                    {format(currentDate, 'yyyy년 M월 d일')} <span className={dayOfWeekStr === '토' ? 'text-blue-500' : dayOfWeekStr === '일' ? 'text-red-500' : 'text-slate-500'}>({dayOfWeekStr})</span>
-                 </h3>
+           <div className="bg-brand-50 border-b border-brand-100 p-4 pb-3 flex flex-col items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-brand-600 tracking-widest uppercase">{isToday(currentDate) ? 'TODAY' : 'DATE'}</span>
+                <button 
+                  onClick={handleToday} 
+                  disabled={isToday(currentDate)} 
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all ${isToday(currentDate) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white shadow-sm border border-slate-200 text-brand-600 hover:bg-brand-50'}`}
+                >
+                  오늘
+                </button>
               </div>
+              
+              <div className="flex items-center justify-center gap-6 w-full">
+                <button onClick={handlePrevDay} className="p-2 bg-white rounded-full shadow-sm text-brand-600 hover:bg-brand-100 transition-colors shrink-0">
+                   <ChevronLeft className="w-5 h-5" />
+                </button>
+                
+                <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight text-center min-w-[140px]">
+                   {format(currentDate, 'M월 d일')} <span className={dayOfWeekStr === '토' ? 'text-blue-500' : dayOfWeekStr === '일' ? 'text-red-500' : 'text-slate-500'}>({dayOfWeekStr})</span>
+                </h3>
 
-              <button onClick={handleNextDay} className="p-2 bg-white rounded-full shadow-sm text-brand-600 hover:bg-brand-100 transition-colors">
-                 <ChevronRight className="w-5 h-5" />
-              </button>
-
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden sm:block">
-                 <button onClick={handleToday} disabled={isToday(currentDate)} className={`px-4 py-2 rounded-xl text-sm font-black transition-all ${isToday(currentDate) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white shadow-sm border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                    오늘
-                 </button>
+                <button onClick={handleNextDay} className="p-2 bg-white rounded-full shadow-sm text-brand-600 hover:bg-brand-100 transition-colors shrink-0">
+                   <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
            </div>
 
@@ -342,7 +601,7 @@ export default function DashboardPage() {
               </div>
            )}
 
-           <div className="p-6 md:p-8 flex-1 bg-slate-50/30">
+           <div className="p-4 md:p-5 flex-1 bg-slate-50/30">
               {loading ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3 min-h-[300px]">
                    <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
@@ -373,43 +632,44 @@ export default function DashboardPage() {
                    </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2">
                   {todaySchedule?.map((slot) => {
                     const hasClass = !!slot?.subject;
                     return (
                       <div 
                         key={slot?.period}
                         onClick={() => handleCardClick(slot)}
-                        className={`relative p-5 rounded-2xl border-2 transition-all flex flex-col items-start min-h-[140px]
+                        className={`relative py-2 px-3 rounded-xl border-2 transition-all flex items-center justify-between gap-3
                           ${hasClass 
-                            ? 'bg-white border-slate-200 hover:border-brand-500 hover:shadow-xl cursor-pointer group' 
+                            ? 'bg-white border-slate-200 hover:border-brand-500 hover:shadow-lg cursor-pointer group' 
                             : 'bg-slate-100/50 border-transparent border-dashed hover:bg-slate-100 cursor-default'
                           }
                         `}
                       >
-                         <div className="flex items-center justify-between w-full mb-4">
-                            <span className={`px-3 py-1 rounded-lg text-sm font-black ${hasClass ? 'bg-brand-100 text-brand-700' : 'bg-slate-200 text-slate-500'}`}>
+                         <div className="flex items-center gap-3 shrink-0">
+                            <span className={`px-2 py-0.5 rounded-md text-[11px] font-black ${hasClass ? 'bg-brand-100 text-brand-700' : 'bg-slate-200 text-slate-500'}`}>
                                {slot?.period}교시
                             </span>
-                            {hasClass && (
-                              <span className="text-xs font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-100 px-2 py-1 rounded-md flex items-center gap-1">
-                                자동 교체 매칭
-                              </span>
-                            )}
                          </div>
 
                          {hasClass ? (
-                           <div className="flex-1 flex flex-col justify-center">
-                             <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2 mb-1">
-                                <BookOpen className="w-5 h-5 text-brand-500" />
+                           <div className="flex-1 flex items-center justify-between min-w-0">
+                             <h3 className="text-base font-black text-slate-800 tracking-tight flex items-center gap-1.5 truncate">
+                                <BookOpen className="w-4 h-4 text-brand-500 shrink-0" />
                                 {slot?.subject}
                              </h3>
-                             <p className="text-slate-500 font-bold ml-7">{slot?.gradeClass}</p>
+                             <p className="text-slate-500 font-bold text-xs truncate ml-2">{slot?.gradeClass}</p>
                            </div>
                          ) : (
-                           <div className="flex-1 flex items-center justify-center w-full">
-                             <p className="text-slate-400 font-bold text-lg tracking-widest">공강</p>
+                           <div className="flex-1 flex items-center justify-center">
+                             <p className="text-slate-400 font-bold text-xs tracking-widest uppercase">Free</p>
                            </div>
+                         )}
+
+                         {hasClass && (
+                            <div className="hidden group-hover:flex items-center gap-1 text-[9px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded shadow-sm shrink-0">
+                               교체 매칭
+                            </div>
                          )}
                       </div>
                     );
@@ -417,7 +677,172 @@ export default function DashboardPage() {
                 </div>
               )}
            </div>
-        </div>
+           
+           {/* Bottom Section: To-Do List (Splitting Right Column View) */}
+           <div className="border-t border-slate-200 flex flex-col h-[300px]">
+              <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-brand-600" />
+                  <h3 className="text-sm font-black text-slate-800 tracking-tight">나만의 업무 수첩 (To-Do)</h3>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {todos.length} ITEMS
+                </span>
+              </div>
+
+              <div className="p-4 flex-1 overflow-hidden flex flex-col gap-4">
+                {/* Input Area */}
+                <form onSubmit={handleAddTodo} className="relative">
+                  <input 
+                    type="text"
+                    value={todoInput}
+                    onChange={(e) => setTodoInput(e.target.value)}
+                    placeholder="새로운 할 일을 입력하고 엔터를 누르세요..."
+                    className="w-full pl-4 pr-12 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:border-brand-500 transition-all placeholder:text-slate-300 shadow-sm"
+                  />
+                  <button 
+                    type="submit"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-brand-600 hover:bg-brand-50 rounded-xl transition-colors"
+                  >
+                    <UserPlus className="w-5 h-5" />
+                  </button>
+                </form>
+
+                {/* List Area */}
+                <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 custom-scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                  <style>{`.custom-scrollbar-hide::-webkit-scrollbar { display: none; }`}</style>
+                  
+                  {isTodoLoading ? (
+                    <div className="h-full flex items-center justify-center py-10">
+                      <Loader2 className="w-6 h-6 text-brand-200 animate-spin" />
+                    </div>
+                  ) : todos.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
+                      <Clock className="w-8 h-8 text-slate-200" />
+                      <p className="text-xs font-bold">오늘 할 일이 없습니다.</p>
+                    </div>
+                  ) : (
+                    todos.map((todo) => (
+                      <div 
+                        key={todo.id}
+                        className="group flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-2xl hover:border-brand-200 hover:shadow-md transition-all animate-in slide-in-from-top-2 duration-200"
+                      >
+                        <button 
+                          onClick={() => toggleTodoComplete(todo)}
+                          className="w-6 h-6 rounded-full border-2 border-slate-200 flex items-center justify-center hover:border-brand-500 hover:bg-brand-50 transition-all shrink-0"
+                        >
+                          <div className="w-3 h-3 rounded-full bg-transparent group-hover:bg-brand-200 transition-colors" />
+                        </button>
+                        
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14px] font-bold text-slate-700 truncate">{todo.text}</p>
+                          {todo.isStarred && todo.date !== currentDateStr && (
+                            <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                              <Star className="w-2.5 h-2.5 fill-amber-500" /> Pinned from {todo.date}
+                            </span>
+                          )}
+                        </div>
+
+                        <button 
+                          onClick={() => toggleTodoStar(todo)}
+                          className={`p-2 rounded-xl transition-all ${todo.isStarred ? 'text-amber-500 bg-amber-50 shadow-inner' : 'text-slate-200 hover:text-amber-400 hover:bg-slate-50'}`}
+                        >
+                          <Star className={`w-4 h-4 ${todo.isStarred ? 'fill-amber-500' : ''}`} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+           </div>
+          </div>
+
+          {/* Column 3: AI Assistant */}
+          <div className="w-full flex flex-col gap-6 sticky lg:top-24">
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col min-h-[500px] h-[500px]">
+              
+              {/* Header */}
+              <div className="bg-brand-50 border-b border-brand-100 p-4 flex items-center gap-3 shrink-0">
+                <div className="p-2 bg-brand-600 text-white rounded-xl shadow-md">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-1.5">
+                    🤖 AI 학교 규정 도우미
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Regulation Assistant Beta</p>
+                </div>
+              </div>
+
+              {/* Message History */}
+              <div className="p-5 flex-1 bg-slate-50/50 overflow-y-auto flex flex-col gap-4 custom-scrollbar">
+                
+                {/* Initial Welcome Message */}
+                {chatMessages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3 opacity-60">
+                    <Bot className="w-10 h-10 text-brand-300" />
+                    <p className="text-xs font-bold text-center">무엇이든 물어보세요!<br/>예: "결강 보강 규정이 어떻게 되나요?"</p>
+                  </div>
+                )}
+
+                {chatMessages.map(msg => (
+                  <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-200`}>
+                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 shadow-sm text-[14px] font-medium leading-relaxed whitespace-pre-wrap 
+                      ${msg.isUser 
+                        ? 'bg-brand-500 text-white rounded-tr-none' 
+                        : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'}`}
+                    >
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                
+                {isAiTyping && (
+                  <div className="flex justify-start animate-in fade-in duration-200">
+                    <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input Area */}
+              <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+                <form onSubmit={handleSendChatMessage} className="flex gap-2 relative">
+                  <button 
+                    type="button" 
+                    className="p-3 text-slate-400 hover:text-brand-600 hover:bg-slate-50 rounded-xl transition-colors shrink-0 tooltip-trigger"
+                    title="문서 업로드 (RAG용 PDF 등)"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
+                  <input 
+                    type="text"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    placeholder="규정에 대해 질문해 보세요..."
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all placeholder:text-slate-400"
+                    disabled={isAiTyping}
+                  />
+                  <button 
+                    type="submit"
+                    disabled={!chatInput.trim() || isAiTyping}
+                    className={`p-3 rounded-xl transition-all shadow-sm shrink-0 flex items-center justify-center
+                      ${chatInput.trim() && !isAiTyping 
+                        ? 'bg-brand-600 text-white hover:bg-brand-700 hover:shadow-md' 
+                        : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </form>
+              </div>
+
+            </div>
+          </div>
+
         </div>
       </main>
 
@@ -426,7 +851,61 @@ export default function DashboardPage() {
         onClose={() => setIsModalOpen(false)}
         sourceSlot={selectedSlot}
         myTimetable={baseTimetable}
+        initialMode={initialMode}
       />
+
+      <NicknameModal 
+        isOpen={isNicknameModalOpen}
+        onClose={() => setIsNicknameModalOpen(false)}
+      />
+
+      {/* 시간표 클릭 시 교체/보강 선택 팝업 (Request #1) */}
+      {isChoiceOpen && selectedSlot && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 bg-brand-50 border-b border-brand-100 text-center">
+              <p className="text-[11px] font-black text-brand-600 uppercase tracking-widest mb-1">Schedule Action</p>
+              <h3 className="text-xl font-black text-slate-800 tracking-tight">어떤 작업을 원하시나요?</h3>
+              <p className="text-xs text-slate-500 font-bold mt-1">({selectedSlot.date} {selectedSlot.period}교시 {selectedSlot.subject})</p>
+            </div>
+            
+            <div className="p-4 flex flex-col gap-3">
+              <button 
+                onClick={() => openSmartModal('SWAP')}
+                className="w-full p-4 flex items-center gap-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-brand-500 hover:bg-brand-50 transition-all group"
+              >
+                <div className="p-3 bg-brand-100 text-brand-600 rounded-xl group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                  <ArrowRightLeft className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="font-black text-slate-800 group-hover:text-brand-700">14일 스마트 교체</p>
+                  <p className="text-[11px] text-slate-400 font-bold">서로 공강 시간을 맞교환합니다.</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => openSmartModal('MAKEUP')}
+                className="w-full p-4 flex items-center gap-4 bg-white border-2 border-slate-100 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all group"
+              >
+                <div className="p-3 bg-orange-100 text-orange-600 rounded-xl group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="font-black text-slate-800 group-hover:text-orange-700">보강 요청 (Makeup)</p>
+                  <p className="text-[11px] text-slate-400 font-bold">비어있는 다른 교사에게 수업을 위탁합니다.</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => setIsChoiceOpen(false)}
+                className="w-full py-3 mt-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 학사일정 상세 보기 팝업 (Phase 9) */}
       {isEventDetailOpen && selectedEventForDetail && (

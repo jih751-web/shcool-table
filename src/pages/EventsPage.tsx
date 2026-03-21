@@ -5,6 +5,7 @@ import type { SchoolEvent } from '../types';
 import { Calendar, Trash2, ArrowLeft, ChevronLeft, ChevronRight, X, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, format, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import ConfirmModal from '../components/ConfirmModal';
 
 const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -20,6 +21,10 @@ const EventsPage: React.FC = () => {
     announcement: '', // 전발사항 필드 초기화
     type: 'EXTERNAL'
   });
+
+  // 삭제 확인 모달 상태
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'events'));
@@ -47,9 +52,23 @@ const EventsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('일정을 삭제하시겠습니까?')) {
-      await deleteDoc(doc(db, 'events', id));
+  const handleDelete = (id: string) => {
+    if (!id) return;
+    setDeletingId(id);
+    setIsConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingId) return;
+
+    try {
+      await deleteDoc(doc(db, 'events', deletingId));
+    } catch (err) {
+      console.error("Delete Error:", err);
+      alert("삭제 중 문제가 발생했습니다. (권한 문제 혹은 네트워크 오류)");
+    } finally {
+      setDeletingId(null);
+      setIsConfirmOpen(false);
     }
   };
 
@@ -241,7 +260,18 @@ const EventsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        title="일정 삭제 확인"
+        message="정말로 이 학사일정 정보를 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다."
+        confirmText="삭제하기"
+        type="danger"
+      />
     </div>
   );
 };
+
 export default EventsPage;
