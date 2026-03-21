@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Loader2, Bot, Cloud } from 'lucide-react';
+import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, collection, getDocs, writeBatch, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo } from '../types';
@@ -70,7 +70,6 @@ export default function DashboardPage() {
   // Todo 상태
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todoInput, setTodoInput] = useState('');
-  const [isTodoLoading, setIsTodoLoading] = useState(false);
 
   // [성능 최적화] PDF Base64 캐싱 (메모리 내)
 
@@ -197,7 +196,6 @@ export default function DashboardPage() {
   // 5. 할 일 목록(Todo) 실시간 구독
   useEffect(() => {
     if (!user) return;
-    setIsTodoLoading(true);
 
     // 조건: 내 할 일 AND 완료되지 않음
     // 인덱스 에러 방지를 위해 쿼리를 단순화하고 클라이언트에서 필터링함 (date/isStarred/orderBy)
@@ -223,10 +221,8 @@ export default function DashboardPage() {
         return timeB - timeA;
       });
       setTodos(items);
-      setIsTodoLoading(false);
     }, (error) => {
       console.error("Todo error:", error);
-      setIsTodoLoading(false);
     });
 
     return () => unsubTodos();
