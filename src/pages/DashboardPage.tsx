@@ -1,14 +1,16 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Loader2, Paperclip, Send, Bot } from 'lucide-react';
+import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Loader2, Bot, Cloud } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, collection, getDocs, writeBatch, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo } from '../types';
+
 import { Link } from 'react-router-dom';
 import SmartReplacementModal from '../components/SmartReplacementModal';
 import { addDays, subDays, format, isToday } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import NicknameModal from '../components/NicknameModal';
+
 
 
 export default function DashboardPage() {
@@ -17,6 +19,7 @@ export default function DashboardPage() {
   const [overrideData, setOverrideData] = useState<Override | null>(null);
   const [dailyEvents, setDailyEvents] = useState<SchoolEvent[]>([]);
   const [eventError, setEventError] = useState<string | null>(null); // 에러 상태 추가
+
   const [selectedEventForDetail, setSelectedEventForDetail] = useState<SchoolEvent | null>(null);
   const [isEventDetailOpen, setIsEventDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,47 +47,7 @@ export default function DashboardPage() {
   const [todoInput, setTodoInput] = useState('');
   const [isTodoLoading, setIsTodoLoading] = useState(false);
 
-  // AI Assistant 상태
-  const [chatMessages, setChatMessages] = useState<{id: string, text: string, isUser: boolean, timestamp: Date}[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [isAiTyping, setIsAiTyping] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [chatMessages, isAiTyping]);
-
-  const handleSendChatMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isAiTyping) return;
-
-    const newUserMsg = {
-      id: Date.now().toString(),
-      text: chatInput.trim(),
-      isUser: true,
-      timestamp: new Date()
-    };
-
-    setChatMessages(prev => [...prev, newUserMsg]);
-    setChatInput('');
-    setIsAiTyping(true);
-
-    // Mock AI Response
-    setTimeout(() => {
-      const newAiMsg = {
-        id: (Date.now() + 1).toString(),
-        text: "문서 내용을 분석하여 답변을 준비 중입니다...\n(현재는 UI 테스트 모드입니다)",
-        isUser: false,
-        timestamp: new Date()
-      };
-      setChatMessages(prev => [...prev, newAiMsg]);
-      setIsAiTyping(false);
-    }, 1000);
-  };
+  // [성능 최적화] PDF Base64 캐싱 (메모리 내)
 
   // 1. 기초 시간표(Base) 실시간 구독
   useEffect(() => {
@@ -382,6 +345,14 @@ export default function DashboardPage() {
             <Link to="/status" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm">
               <Clock className="w-4 h-4" /> 교체현황
             </Link>
+            <a 
+              href="https://drive.google.com/drive/folders/1MasUNhkb4PhagYWGwpQlZzHod5xQa0fw?usp=sharing" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm"
+            >
+              <Cloud className="w-4 h-4" /> 규정 자료실
+            </a>
             <div className="w-px h-5 bg-slate-200 mx-1"></div>
             
             {/* 개인 설정함 (톱니바퀴 + 드롭다운) */}
@@ -454,10 +425,52 @@ export default function DashboardPage() {
         
         {/* Welcome Section */}
         <div className="w-full mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">
-              안녕하세요, <span className="text-brand-600">{userData?.nickname || baseTimetable?.teacherName || '선생님'}</span>!
-            </h2>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-4 flex-wrap">
+              <h2 className="text-3xl font-black text-slate-800 tracking-tight">
+                안녕하세요, <span className="text-brand-600">{userData?.nickname || baseTimetable?.teacherName || '선생님'}</span>!
+              </h2>
+              
+              {/* Shortcut Badges Group (2x2 Grid) */}
+              <div className="grid grid-cols-2 gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-left-4 duration-500">
+                <a 
+                  href="https://getis.gyo6.net/" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-800 text-white text-[10px] font-black hover:bg-slate-700 transition-colors shadow-sm whitespace-nowrap" 
+                  title="업무포털 바로가기"
+                >
+                  업무
+                </a>
+                <a 
+                  href="https://www.gbe.kr/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="flex items-center justify-center px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[10px] font-black hover:bg-emerald-500 transition-colors shadow-sm whitespace-nowrap" 
+                  title="경북교육청 바로가기"
+                >
+                  경북
+                </a>
+                <a 
+                  href="https://school.gyo6.net/ulleungm" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="flex items-center justify-center px-2 py-0.5 rounded-lg bg-orange-500 text-white text-[10px] font-black hover:bg-orange-400 transition-colors shadow-sm whitespace-nowrap" 
+                  title="학교 홈페이지 바로가기"
+                >
+                  울중
+                </a>
+                <a 
+                  href="https://www.neti.go.kr/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="flex items-center justify-center px-2 py-0.5 rounded-lg bg-purple-600 text-white text-[10px] font-black hover:bg-purple-500 transition-colors shadow-sm whitespace-nowrap" 
+                  title="중앙교육연수원 바로가기"
+                >
+                  연수
+                </a>
+              </div>
+            </div>
             <p className="text-slate-500 font-medium flex items-center gap-2">
               <Clock className="w-4 h-4" /> 일일 시간표 내역을 탐색하고 교체할 수 있습니다.
             </p>
@@ -754,92 +767,63 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-           </div>
+            </div>
           </div>
 
-          {/* Column 3: AI Assistant */}
-          <div className="w-full flex flex-col gap-6 sticky lg:top-24">
-            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col min-h-[500px] h-[500px]">
+          {/* Column 3: Assistant Panel */}
+          <div className="flex flex-col gap-6 lg:col-span-1 min-h-0">
+            {/* NotebookLM Assistant Entry Card */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[480px] sticky top-24 group/card transition-all hover:shadow-2xl">
               
-              {/* Header */}
-              <div className="bg-brand-50 border-b border-brand-100 p-4 flex items-center gap-3 shrink-0">
-                <div className="p-2 bg-brand-600 text-white rounded-xl shadow-md">
-                  <Bot className="w-5 h-5" />
+              {/* Card Header (Sea Theme) */}
+              <div className="bg-gradient-to-br from-blue-600 to-sky-400 p-8 flex flex-col items-center justify-center text-center gap-4 shrink-0 relative overflow-hidden">
+                <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                <div className="absolute -left-4 -bottom-4 w-24 h-24 bg-sky-300/20 rounded-full blur-xl"></div>
+
+                <div className="relative z-10 p-4 bg-white/20 backdrop-blur-md text-white rounded-2xl shadow-xl border border-white/30 animate-bounce-slow">
+                  <Bot className="w-10 h-10" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-1.5">
-                    🤖 AI 학교 규정 도우미
+                
+                <div className="relative z-10">
+                  <h3 className="text-2xl font-black text-white tracking-tight drop-shadow-md">
+                    지능형 업무 비서 <span className="text-yellow-200">울릉이</span>
                   </h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Regulation Assistant Beta</p>
+                  <p className="text-blue-50 text-xs font-bold mt-1 opacity-90 uppercase tracking-[0.2em]">Powered by NotebookLM</p>
                 </div>
               </div>
 
-              {/* Message History */}
-              <div className="p-5 flex-1 bg-slate-50/50 overflow-y-auto flex flex-col gap-4 custom-scrollbar">
-                
-                {/* Initial Welcome Message */}
-                {chatMessages.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3 opacity-60">
-                    <Bot className="w-10 h-10 text-brand-300" />
-                    <p className="text-xs font-bold text-center">무엇이든 물어보세요!<br/>예: "결강 보강 규정이 어떻게 되나요?"</p>
-                  </div>
-                )}
+              {/* Main Action Area */}
+              <div className="flex-1 p-8 flex flex-col items-center justify-between bg-slate-50/30">
+                <div className="text-center space-y-3">
+                  <p className="text-slate-500 font-bold text-sm leading-relaxed">
+                    학교 규정, 학술 자료, 복무 지침 등<br/>
+                    궁금한 모든 것을 울릉이에게 물어보세요!
+                  </p>
+                </div>
 
-                {chatMessages.map(msg => (
-                  <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-200`}>
-                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 shadow-sm text-[14px] font-medium leading-relaxed whitespace-pre-wrap 
-                      ${msg.isUser 
-                        ? 'bg-brand-500 text-white rounded-tr-none' 
-                        : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'}`}
-                    >
-                      {msg.text}
-                    </div>
-                  </div>
-                ))}
-                
-                {isAiTyping && (
-                  <div className="flex justify-start animate-in fade-in duration-200">
-                    <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              {/* Input Area */}
-              <div className="p-4 bg-white border-t border-slate-100 shrink-0">
-                <form onSubmit={handleSendChatMessage} className="flex gap-2 relative">
-                  <button 
-                    type="button" 
-                    className="p-3 text-slate-400 hover:text-brand-600 hover:bg-slate-50 rounded-xl transition-colors shrink-0 tooltip-trigger"
-                    title="문서 업로드 (RAG용 PDF 등)"
-                  >
-                    <Paperclip className="w-5 h-5" />
+                {/* NotebookLM Button */}
+                <a 
+                  href="https://notebooklm.google.com/notebook/265c1fe6-51ce-4b03-8db1-5f9fce66c78f"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full relative group"
+                >
+                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-sky-500 rounded-2xl blur opacity-25 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
+                  <button className="relative w-full bg-gradient-to-r from-blue-700 to-sky-500 hover:from-blue-800 hover:to-sky-600 text-white font-black py-5 px-6 rounded-2xl shadow-lg transition-all transform group-hover:-translate-y-1 active:translate-y-0.5 flex items-center justify-center gap-3">
+                    <span className="text-base tracking-tighter">울릉이에게 무엇이든 물어보세요!</span>
+                    <ArrowRightLeft className="w-5 h-5 rotate-45" />
                   </button>
-                  <input 
-                    type="text"
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    placeholder="규정에 대해 질문해 보세요..."
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all placeholder:text-slate-400"
-                    disabled={isAiTyping}
-                  />
-                  <button 
-                    type="submit"
-                    disabled={!chatInput.trim() || isAiTyping}
-                    className={`p-3 rounded-xl transition-all shadow-sm shrink-0 flex items-center justify-center
-                      ${chatInput.trim() && !isAiTyping 
-                        ? 'bg-brand-600 text-white hover:bg-brand-700 hover:shadow-md' 
-                        : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </form>
-              </div>
+                </a>
 
+                {/* Safety Disclosure */}
+                <div className="bg-white border border-slate-100 p-4 rounded-xl shadow-sm">
+                  <p className="text-[10px] text-slate-400 font-medium leading-relaxed text-center">
+                    ※ 울릉이는 구글 NotebookLM을 기반으로 작동합니다.<br/>
+                    선생님들의 개별 질문 내용은 관리자도 볼 수 없으며<br/>
+                    안전하게 보호되니 안심하고 이용해 주세요.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
