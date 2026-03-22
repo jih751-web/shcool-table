@@ -425,16 +425,11 @@ export default function DashboardPage() {
   };
 
 
+  // Safety Wrapper: 브라우저 환경이 준비되기 전에는 아무것도 렌더링하지 않음
+  if (!isMounted) return null;
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {(!user || !isMounted) && (
-        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
-          <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
-          <p className="text-sm font-bold text-slate-400 animate-pulse">
-            {isMounted ? '인증 정보를 확인 중입니다...' : '시스템을 준비 중입니다...'}
-          </p>
-        </div>
-      )}
       <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-[1200px] mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -477,7 +472,11 @@ export default function DashboardPage() {
                     `}
                     title="관리자 설정"
                   >
-                    <Settings className={`w-5 h-5 ${isSettingsOpen ? 'rotate-90' : ''} transition-transform duration-300`} />
+                    {isMounted ? (
+                      <Settings className={`w-5 h-5 ${isSettingsOpen ? 'rotate-90' : ''} transition-transform duration-300`} />
+                    ) : (
+                      <span className="text-xl">⚙️</span>
+                    )}
                   </button>
 
                   {isSettingsOpen && (

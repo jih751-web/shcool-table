@@ -62,14 +62,8 @@ const LandingPage: React.FC = () => {
     );
   }
 
-  // Safety Wrapper: 클라이언트 마운트 전에는 빈 화면 또는 최소한의 로딩만 표시
-  if (!isMounted) {
-    return (
-      <div className="min-h-screen bg-brand-50 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  // Safety Wrapper: 클라이언트 마운트 전에는 아무것도 그리지 않음 (백지 현상 방지 핵심)
+  if (!isMounted) return null;
 
   return (
     <div className="min-h-screen bg-brand-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
