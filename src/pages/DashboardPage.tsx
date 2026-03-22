@@ -137,11 +137,15 @@ export default function DashboardPage() {
         const alreadyReloaded = sessionStorage.getItem('ulleung_reloaded_from_kakao') === 'true';
 
         if (isFromKakao && !alreadyReloaded) {
-          sessionStorage.setItem('ulleung_reloaded_from_kakao', 'true');
-          params.delete('from_kakaotalk');
-          const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
-          window.history.replaceState({}, '', newUrl);
-          window.location.reload();
+          try {
+            sessionStorage.setItem('ulleung_reloaded_from_kakao', 'true');
+            params.delete('from_kakaotalk');
+            const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+            window.history.replaceState({}, '', newUrl);
+            window.location.reload();
+          } catch (storageErr) {
+            console.warn('Storage access denied, skipping reload sync:', storageErr);
+          }
         }
 
         return () => {
@@ -466,7 +470,9 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error('Install handler failed safely:', err);
-      alert('설치 과정에서 오류가 발생했습니다. 브라우저 설정에서 직접 설치해 주세요.');
+      try {
+        alert('설치 과정에서 오류가 발생했습니다. 브라우저 설정에서 직접 설치해 주세요.');
+      } catch (e) {}
     }
   };
 

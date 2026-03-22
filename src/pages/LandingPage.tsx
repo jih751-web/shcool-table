@@ -22,9 +22,15 @@ const LandingPage: React.FC = () => {
       setIsKakao(kakaoUser);
 
       if (kakaoUser) {
-        // 모든 카톡 환경: 최신 표준 kakaotalk:// 스킴 사용 (자동 탈출 시도)
-        const externalUrl = 'kakaotalk://web/openExternalApp?url=' + encodeURIComponent(window.location.href);
-        window.location.href = externalUrl;
+        try {
+          // 모든 카톡 환경: 최신 표준 kakaotalk:// 스킴 사용 (자동 탈출 시도)
+          const externalUrl = 'kakaotalk://web/openExternalApp?url=' + encodeURIComponent(window.location.href);
+          if (typeof window !== 'undefined') {
+            window.location.href = externalUrl;
+          }
+        } catch (redirErr) {
+          console.error('Redirection attempt failed:', redirErr);
+        }
         
         // iOS의 경우 별도의 안내 팝업도 함께 준비 (자동 탈출이 안 될 때를 대비)
         if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod')) {
