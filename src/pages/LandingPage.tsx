@@ -1,19 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { CalendarDays, AlertCircle, ExternalLink, X } from 'lucide-react';
+import { CalendarDays, AlertCircle, ExternalLink, X, ClipboardCheck, Copy } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
   const { user, signInWithGoogle } = useAuth();
   const [isInApp, setIsInApp] = useState(false);
   const [showGuide, setShowGuide] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // 인앱 브라우저 감지 (카카오톡, 인스타그램, 라인 등)
+    // 인앱 브라우저 감지 (카카오톡, 네이버, 인스타그램, 라인 등)
     const ua = navigator.userAgent;
-    const isApp = /KAKAOTALK|Instagram|Line|FBAN|FBAV/i.test(ua);
+    const isApp = /KAKAOTALK|NAVER|Instagram|Line|FBAN|FBAV/i.test(ua);
     setIsInApp(isApp);
   }, []);
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      alert('주소 복사에 실패했습니다. 직접 주소창을 길게 눌러 복사해 주세요.');
+    }
+  };
 
   if (user) {
     return <Navigate to="/dashboard" replace />;
@@ -49,7 +61,7 @@ const LandingPage: React.FC = () => {
               <div className="space-y-4 mb-8">
                 <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <div className="w-6 h-6 bg-brand-600 text-white rounded-full flex items-center justify-center text-xs font-black shrink-0">1</div>
-                  <p className="text-sm font-black text-slate-700">우측 상단 또는 하단의 <span className="bg-slate-200 px-1 rounded">더보기(...)</span> 메뉴 클릭</p>
+                  <p className="text-sm font-black text-slate-700">우측 상단 또는 하단의 <span className="bg-slate-200 px-1 rounded">더보기(⋮ 또는 ...)</span> 메뉴 클릭</p>
                 </div>
                 <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <div className="w-6 h-6 bg-brand-600 text-white rounded-full flex items-center justify-center text-xs font-black shrink-0">2</div>
@@ -57,12 +69,28 @@ const LandingPage: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowGuide(false)}
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
-              >
-                가이드 닫고 계속하기 <ExternalLink className="w-4 h-4" />
-              </button>
+              <div className="grid grid-cols-1 gap-3 mb-4">
+                <button
+                  onClick={handleCopyUrl}
+                  className={`w-full py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 border-2 ${
+                    copied 
+                    ? 'bg-emerald-50 border-emerald-500 text-emerald-600' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {copied ? (
+                    <>복사 완료! <ClipboardCheck className="w-5 h-5" /></>
+                  ) : (
+                    <>현재 주소 복사하기 <Copy className="w-5 h-5" /></>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowGuide(false)}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                >
+                  가이드 닫고 계속하기 <ExternalLink className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
