@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { doc, onSnapshot, setDoc, collection } from 'firebase/firestore';
@@ -67,29 +67,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     });
 
-    // 3. 리다이렉트 결과 처리 (모바일용)
-    const handleRedirectResult = async () => {
-      try {
-        console.log("Checking for Redirect Result...");
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          console.log("Redirect Login Successful:", result.user.email);
-        } else {
-          console.log("No Redirect Result found or already handled.");
-        }
-      } catch (error: any) {
-        if (error.code !== 'auth/redirect-cancelled-by-user') {
-          console.error("Redirect login result error:", error);
-          // 치명적 에러가 아니므로 alert만 띄우고 앱은 죽이지 않음
-          setTimeout(() => alert(`로그인 결과 처리 중 오류가 발생했습니다: ${error.message}`), 500);
-        }
-      } finally {
-        setIsLoggingIn(false);
-      }
-    };
-
-    handleRedirectResult();
-
     return () => {
       if (unsubscribe) unsubscribe();
       if (unsubProfile) unsubProfile();
@@ -97,32 +74,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithGoogle = async () => {
-    if (isLoggingIn) return;
-    
+    // 팝업 차단 방지: 클릭 직후 어떠한 비동기(await)나 지연 없이 즉각 실행
     try {
-      setIsLoggingIn(true);
-      // 모바일 기기 또는 인앱 브라우저 판별 (더 넓은 범위의 모바일 UA 체크)
-      const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isInApp = /KAKAOTALK|NAVER|Instagram|Line|FBAN|FBAV/i.test(navigator.userAgent);
-
-      if (isMobile || isInApp) {
-        // 모바일은 무조건 리다이렉트 방식 (팝업 차단 및 403 에러 방지용)
-        console.log("Forcing Redirect Login for Mobile/In-App environment");
-        await signInWithRedirect(auth, googleProvider);
-      } else {
-        await signInWithPopup(auth, googleProvider);
-        setIsLoggingIn(false);
-      }
+      // 팝업 실행 시점에 즉시 auth 함수 호출
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("Sign in successful:", result.user.email);
+      setIsLoggingIn(true); // 로딩 상태는 팝업 성공 이후에 표시 (이미 늦었으므로)
     } catch (error: any) {
-      setIsLoggingIn(false);
       console.error("Google sign in failed:", error);
+      setIsLoggingIn(false);
       
       if (error.code === 'auth/popup-blocked') {
-        alert('구글 로그인 팝업이 차단되었습니다. 브라우저 설정에서 팝업 차단을 해제하거나 리다이렉트 방식을 사용해 주세요.');
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        // 사용자가 팝업을 닫음 - 알림 불필요
+        alert('브라우저의 [팝업 차단] 설정이 활성화되어 있습니다. 브라우저 상단/하단의 알림창을 눌러 [팝업 허용]을 선택해 주세요.');
+      } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+        // 사용자 취소 - 무시
       } else {
-        alert(`구글 로그인 창을 여는 중 문제가 발생했습니다: ${error.message}\n브라우저의 팝업 차단 설정을 확인해 주세요.`);
+        alert(`로그인 중 문제가 발생했습니다: ${error.message}`);
       }
     }
   };
