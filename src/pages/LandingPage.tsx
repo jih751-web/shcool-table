@@ -11,28 +11,29 @@ const LandingPage: React.FC = () => {
 
   useEffect(() => {
     setIsMounted(true);
+    
+    // 1. 서버 사이드 렌더링 환경에서는 즉시 종료 (최후의 안전장치)
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
     
-    const ua = navigator.userAgent;
-    const isKakao = /KAKAOTALK/i.test(ua);
-    const isAndroid = /Android/i.test(ua);
-    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    try {
+      const ua = navigator.userAgent;
+      const isKakao = /KAKAOTALK/i.test(ua);
+      const isAndroid = /Android/i.test(ua);
+      const isIOS = /iPhone|iPad|iPod/i.test(ua);
 
-    if (isKakao) {
-      if (isAndroid) {
-        // 안드로이드 카카오톡: 크롬으로 자동 탈출
-        try {
-          const currentUrl = new URL(window.location.href);
-          currentUrl.searchParams.set('from_kakaotalk', 'true');
-          const encodedUrl = currentUrl.href.replace(/https?:\/\//i, '');
-          window.location.href = `intent://${encodedUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
-        } catch (e) {
-          console.error('Failed to escape KakaoTalk:', e);
+      if (isKakao) {
+        if (isAndroid) {
+          // 안드로이드 및 일반 카톡 탈출: 더 표준적이고 안전한 kakaotalk:// 스킴 사용
+          const externalUrl = 'kakaotalk://web/openExternalApp?url=' + encodeURIComponent(window.location.href + (window.location.search ? '&' : '?') + 'from_kakaotalk=true');
+          window.location.href = externalUrl;
+        } else if (isIOS) {
+          // iOS 카카오톡: 안내 팝업 표시 (Safari 유도)
+          setIsKakaoIOS(true);
         }
-      } else if (isIOS) {
-        // iOS 카카오톡: 안내 팝업 표시
-        setIsKakaoIOS(true);
       }
+    } catch (error) {
+      console.error('KakaoTalk escape logic failed safely:', error);
+      // 에러가 나더라도 사이트 구동을 멈추지 않음 (백지 방지)
     }
   }, []);
 
