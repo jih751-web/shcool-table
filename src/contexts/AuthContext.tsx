@@ -13,6 +13,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateNickname: (nickname: string) => Promise<void>;
+  isLoggingIn: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -22,6 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userData, setUserData] = useState<Teacher | null>(null);
   const [userProfiles, setUserProfiles] = useState<Record<string, Teacher>>({});
   const [loading, setLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // 1. 전체 사용자 프로필 실시간 구독 (닉네임 전역 반영을 위해)
   useEffect(() => {
@@ -63,11 +65,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // 3. 리다이렉트 결과 처리 (모바일용)
-    getRedirectResult(auth).catch((error) => {
-      if (error.code !== 'auth/redirect-cancelled-by-user') {
-        console.error("Redirect login result error:", error);
-      }
-    });
+    getRedirectResult(auth)
+      .then(() => {
+        setIsLoggingIn(false);
+      })
+      .catch((error) => {
+        setIsLoggingIn(false);
+        if (error.code !== 'auth/redirect-cancelled-by-user') {
+          console.error("Redirect login result error:", error);
+        }
+      });
 
     return () => {
       unsubscribe();
@@ -76,23 +83,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithGoogle = async () => {
+    if (isLoggingIn) return;
+    
     try {
-      // 모바일 기기 또는 인앱 브라우저 판별
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      const isInApp = /KAKAOTALK|Instagram|Line|FBAN|FBAV/i.test(navigator.userAgent);
+      setIsLoggingIn(true);
+      // 모바일 기기 또는 인앱 브라우저 판별 (더 넓은 범위의 모바일 UA 체크)
+      const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isInApp = /KAKAOTALK|NAVER|Instagram|Line|FBAN|FBAV/i.test(navigator.userAgent);
 
       if (isMobile || isInApp) {
-        // 모바일은 리다이렉트 방식이 훨씬 안정적 (403 disallowed_useragent 방지)
+        // 모바일은 무조건 리다이렉트 방식 (팝업 차단 및 403 에러 방지용)
+        console.log("Forcing Redirect Login for Mobile/In-App environment");
         await signInWithRedirect(auth, googleProvider);
       } else {
         await signInWithPopup(auth, googleProvider);
+        setIsLoggingIn(false);
       }
     } catch (error: any) {
+      setIsLoggingIn(false);
       console.error("Google sign in failed:", error);
+      
       if (error.code === 'auth/popup-blocked') {
-        alert('팝업이 차단되었습니다. 팝업 차단을 해제하거나 리다이렉트 방식을 시도해주세요.');
+        alert('구글 로그인 팝업이 차단되었습니다. 브라우저 설정에서 팝업 차단을 해제하거나 리다이렉트 방식을 사용해 주세요.');
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        // 사용자가 팝업을 닫음 - 알림 불필요
       } else {
-        alert(`로그인 중 오류가 발생했습니다: ${error.message}`);
+        alert(`구글 로그인 창을 여는 중 문제가 발생했습니다: ${error.message}\n브라우저의 팝업 차단 설정을 확인해 주세요.`);
       }
     }
   };
@@ -121,7 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, userData, userProfiles, loading, signInWithGoogle, logout, updateNickname }}>
+    <AuthContext.Provider value={{ user, userData, userProfiles, loading, signInWithGoogle, logout, updateNickname, isLoggingIn }}>
       {!loading && children}
     </AuthContext.Provider>
   );

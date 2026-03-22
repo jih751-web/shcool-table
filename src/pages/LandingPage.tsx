@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { CalendarDays, AlertCircle, ExternalLink, X, ClipboardCheck, Copy } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
-  const { user, signInWithGoogle } = useAuth();
+  const { user, signInWithGoogle, isLoggingIn } = useAuth();
   const [isInApp, setIsInApp] = useState(false);
   const [showGuide, setShowGuide] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -34,12 +34,12 @@ const LandingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Background Decor */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-200/20 rounded-full blur-[100px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-200/20 rounded-full blur-[100px]" />
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-200/20 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-200/20 rounded-full blur-[100px] pointer-events-none" />
 
       {/* In-App Browser Guidance Overlay */}
       {isInApp && showGuide && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-md flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl border border-rose-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-500">
             <div className="bg-rose-500 p-6 text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -49,13 +49,14 @@ const LandingPage: React.FC = () => {
               <button 
                 onClick={() => setShowGuide(false)}
                 className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
+                disabled={isLoggingIn}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-8">
               <p className="text-slate-600 font-bold mb-6 leading-relaxed">
-                현재 <span className="text-rose-600">인앱 브라우저(카카오/인스타 등)</span> 환경입니다. 구글 보안 정책상 로그인이 차단될 수 있습니다.
+                현재 <span className="text-rose-600">인앱 브라우저(카카오/네이버 등)</span> 환경입니다. 구글 보안 정책상 로그인이 차단될 수 있습니다.
               </p>
               
               <div className="space-y-4 mb-8">
@@ -96,11 +97,11 @@ const LandingPage: React.FC = () => {
         </div>
       )}
 
-      <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-brand-100 relative z-10 animate-in zoom-in-95 duration-500">
+      <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-brand-100 relative z-[20] animate-in zoom-in-95 duration-500">
         <div className="bg-brand-600 p-10 text-center text-white relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16" />
           <CalendarDays className="w-20 h-20 mx-auto mb-6 opacity-95 animate-bounce-subtle" />
-          <h1 className="text-3xl font-black mb-3 tracking-tighter">울릉중학교</h1>
+          <h1 className="text-3xl font-black mb-3 tracking-tighter text-white">울릉중학교</h1>
           <p className="text-brand-100 text-sm font-bold opacity-80 uppercase tracking-widest text-[11px]">지능형 시간표 관리 시스템</p>
         </div>
         
@@ -117,11 +118,26 @@ const LandingPage: React.FC = () => {
 
           <button
             onClick={signInWithGoogle}
-            className="w-full flex items-center justify-center gap-4 bg-white border-2 border-slate-100 text-slate-700 font-black py-4 px-6 rounded-[1.5rem] hover:bg-slate-50 hover:border-brand-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-lg group relative overflow-hidden"
+            disabled={isLoggingIn}
+            className={`w-full flex items-center justify-center gap-4 py-4 px-6 rounded-[1.5rem] font-black transition-all duration-300 shadow-lg group relative overflow-hidden border-2 
+              ${isLoggingIn 
+                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' 
+                : 'bg-white border-slate-100 text-slate-700 hover:bg-slate-50 hover:border-brand-200 hover:shadow-xl hover:-translate-y-1 active:scale-95'
+              }`}
+            style={{ zIndex: 30 }}
           >
-            <div className="absolute inset-0 bg-brand-50 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-7 h-7 relative z-10" />
-            <span className="relative z-10 text-[17px]">구글 계정으로 시작하기</span>
+            {isLoggingIn ? (
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                <span>로그인 진행 중...</span>
+              </div>
+            ) : (
+              <>
+                <div className="absolute inset-0 bg-brand-50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-7 h-7 relative z-10" />
+                <span className="relative z-10 text-[17px]">구글 계정으로 시작하기</span>
+              </>
+            )}
           </button>
 
           <p className="mt-8 text-[11px] font-bold text-slate-400">
