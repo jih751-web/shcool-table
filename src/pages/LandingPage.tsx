@@ -1,19 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { CalendarDays, AlertCircle, ExternalLink, X, ClipboardCheck, Copy } from 'lucide-react';
+import { CalendarDays, AlertCircle, ClipboardCheck, Copy } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
   const { user, signInWithGoogle, isLoggingIn } = useAuth();
-  const [isInApp, setIsInApp] = useState(false);
-  const [showGuide, setShowGuide] = useState(true);
+  const [isKakaoIOS, setIsKakaoIOS] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // 인앱 브라우저 감지 (카카오톡, 네이버, 인스타그램, 라인 등)
     const ua = navigator.userAgent;
-    const isApp = /KAKAOTALK|NAVER|Instagram|Line|FBAN|FBAV/i.test(ua);
-    setIsInApp(isApp);
+    const isKakao = /KAKAOTALK/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+    if (isKakao) {
+      if (isAndroid) {
+        // 안드로이드 카카오톡: 크롬으로 자동 탈출
+        const url = window.location.href.replace(/https?:\/\//i, '');
+        window.location.href = `intent://${url}#Intent;scheme=https;package=com.android.chrome;end;`;
+      } else if (isIOS) {
+        // iOS 카카오톡: 안내 팝업 표시
+        setIsKakaoIOS(true);
+      }
+    }
   }, []);
 
   const handleCopyUrl = async () => {
@@ -46,61 +56,38 @@ const LandingPage: React.FC = () => {
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-200/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-200/20 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* In-App Browser Guidance Overlay */}
-      {isInApp && showGuide && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-md flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl border border-rose-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-500">
-            <div className="bg-rose-500 p-6 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-6 h-6" />
-                <h3 className="font-black tracking-tight text-lg">외부 브라우저 권장</h3>
-              </div>
-              <button 
-                onClick={() => setShowGuide(false)}
-                className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
-                disabled={isLoggingIn}
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {/* iOS KakaoTalk Guidance Overlay */}
+      {isKakaoIOS && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-500">
+          <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl overflow-hidden border-4 border-rose-500 animate-in zoom-in-95 duration-700">
+            <div className="bg-rose-500 p-8 text-center text-white">
+              <AlertCircle className="w-16 h-16 mx-auto mb-4 animate-bounce" />
+              <h3 className="text-2xl font-black tracking-tight leading-tight">
+                카카오톡에서는<br />구글 로그인이 제한됩니다!
+              </h3>
             </div>
-            <div className="p-8">
-              <p className="text-slate-600 font-bold mb-6 leading-relaxed">
-                현재 <span className="text-rose-600">인앱 브라우저(카카오/네이버 등)</span> 환경입니다. 구글 보안 정책상 로그인이 차단될 수 있습니다.
+            <div className="p-10 text-center">
+              <p className="text-slate-700 font-bold text-lg mb-8 leading-relaxed">
+                화면 오른쪽 아래의 <span className="bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">더보기(⋮)</span> 버튼을 누르고<br />
+                <span className="text-rose-600 underline underline-offset-4 decoration-2 font-black">`Safari로 열기`</span>를<br />선택해 주세요! 🚀
               </p>
               
-              <div className="space-y-4 mb-8">
-                <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div className="w-6 h-6 bg-brand-600 text-white rounded-full flex items-center justify-center text-xs font-black shrink-0">1</div>
-                  <p className="text-sm font-black text-slate-700">우측 상단 또는 하단의 <span className="bg-slate-200 px-1 rounded">더보기(⋮ 또는 ...)</span> 메뉴 클릭</p>
-                </div>
-                <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div className="w-6 h-6 bg-brand-600 text-white rounded-full flex items-center justify-center text-xs font-black shrink-0">2</div>
-                  <p className="text-sm font-black text-slate-700"><span className="text-brand-600">'다른 브라우저로 열기'</span> 또는 <span className="text-brand-600">'Chrome/Safari로 열기'</span> 선택</p>
-                </div>
-              </div>
+              <button
+                onClick={handleCopyUrl}
+                className={`w-full py-5 rounded-3xl font-black transition-all flex items-center justify-center gap-3 border-2 mb-4 text-lg ${
+                  copied 
+                  ? 'bg-emerald-50 border-emerald-500 text-emerald-600' 
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 shadow-inner'
+                }`}
+              >
+                {copied ? (
+                  <>복사 완료! <ClipboardCheck className="w-6 h-6" /></>
+                ) : (
+                  <>현재 주소 복사하기 <Copy className="w-6 h-6" /></>
+                )}
+              </button>
 
-              <div className="grid grid-cols-1 gap-3 mb-4">
-                <button
-                  onClick={handleCopyUrl}
-                  className={`w-full py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 border-2 ${
-                    copied 
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-600' 
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  {copied ? (
-                    <>복사 완료! <ClipboardCheck className="w-5 h-5" /></>
-                  ) : (
-                    <>현재 주소 복사하기 <Copy className="w-5 h-5" /></>
-                  )}
-                </button>
-                <button
-                  onClick={() => setShowGuide(false)}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
-                >
-                  가이드 닫고 계속하기 <ExternalLink className="w-4 h-4" />
-                </button>
-              </div>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Ulleung Middle School</p>
             </div>
           </div>
         </div>
