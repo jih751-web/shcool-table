@@ -110,13 +110,20 @@ export default function DashboardPage() {
   // 카카오톡 탈출 후 초기화 (강제 1회 새로고침)
   useEffect(() => {
     setIsMounted(true);
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('from_kakaotalk') === 'true') {
-      // 파라미터 제거 후 새로고침 (무한 루프 방지)
-      params.delete('from_kakaotalk');
-      const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
-      window.history.replaceState({}, '', newUrl);
-      window.location.reload();
+    
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const isFromKakao = params.get('from_kakaotalk') === 'true';
+      const alreadyReloaded = sessionStorage.getItem('ulleung_reloaded_from_kakao') === 'true';
+
+      if (isFromKakao && !alreadyReloaded) {
+        // 파라미터 제거 후 세션 표시하고 새로고침
+        sessionStorage.setItem('ulleung_reloaded_from_kakao', 'true');
+        params.delete('from_kakaotalk');
+        const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+        window.history.replaceState({}, '', newUrl);
+        window.location.reload();
+      }
     }
   }, []);
 

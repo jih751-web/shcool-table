@@ -9,6 +9,8 @@ const LandingPage: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+    
     const ua = navigator.userAgent;
     const isKakao = /KAKAOTALK/i.test(ua);
     const isAndroid = /Android/i.test(ua);
@@ -17,10 +19,14 @@ const LandingPage: React.FC = () => {
     if (isKakao) {
       if (isAndroid) {
         // 안드로이드 카카오톡: 크롬으로 자동 탈출
-        const currentUrl = new URL(window.location.href);
-        currentUrl.searchParams.set('from_kakaotalk', 'true');
-        const encodedUrl = currentUrl.href.replace(/https?:\/\//i, '');
-        window.location.href = `intent://${encodedUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
+        try {
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set('from_kakaotalk', 'true');
+          const encodedUrl = currentUrl.href.replace(/https?:\/\//i, '');
+          window.location.href = `intent://${encodedUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
+        } catch (e) {
+          console.error('Failed to escape KakaoTalk:', e);
+        }
       } else if (isIOS) {
         // iOS 카카오톡: 안내 팝업 표시
         setIsKakaoIOS(true);
@@ -29,6 +35,7 @@ const LandingPage: React.FC = () => {
   }, []);
 
   const handleCopyUrl = async () => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
     try {
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
