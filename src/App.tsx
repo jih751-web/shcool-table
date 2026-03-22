@@ -11,8 +11,21 @@ import SpecialRoomPage from './pages/SpecialRoomPage';
 import NotificationToast from './components/NotificationToast';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-brand-50 flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center animate-pulse">
+          <div className="w-12 h-12 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-brand-700 font-black text-sm tracking-widest uppercase">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) return <Navigate to="/" replace />;
+  
   return (
     <>
       {children}
