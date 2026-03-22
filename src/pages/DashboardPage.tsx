@@ -15,13 +15,15 @@ import { healingQuotes } from '../data/healingQuotes';
 // --- Healing Quote Widget (Wide Banner Style) ---
 const HealingQuoteWidget = () => {
   const [quote, setQuote] = useState("");
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     const randomIndex = Math.floor(Math.random() * healingQuotes.length);
     setQuote(randomIndex >= 0 ? healingQuotes[randomIndex] : "");
   }, []);
 
-  if (!quote) return null;
+  if (!isMounted || !quote) return null;
 
   return (
     <div className="hidden lg:flex items-center gap-6 py-5 px-10 bg-white/90 backdrop-blur-md rounded-[2rem] border-2 border-indigo-100 shadow-lg animate-in fade-in slide-in-from-right-4 duration-700 flex-1 ml-6 hover:shadow-xl transition-all group overflow-hidden relative">
@@ -428,7 +430,9 @@ export default function DashboardPage() {
       {(!user || !isMounted) && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
           <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
-          <p className="text-sm font-bold text-slate-400 animate-pulse">인증 정보를 확인 중입니다...</p>
+          <p className="text-sm font-bold text-slate-400 animate-pulse">
+            {isMounted ? '인증 정보를 확인 중입니다...' : '시스템을 준비 중입니다...'}
+          </p>
         </div>
       )}
       <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
@@ -463,7 +467,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {user?.email === 'jih751@gmail.com' ? (
+            {isMounted && user?.email === 'jih751@gmail.com' ? (
               // 1. 최고 관리자(Admin) 전용: 톱니바퀴 드롭다운
                 <div className="relative" ref={settingsRef}>
                   <button 

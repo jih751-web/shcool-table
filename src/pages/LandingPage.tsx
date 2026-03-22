@@ -7,8 +7,10 @@ const LandingPage: React.FC = () => {
   const { user, signInWithGoogle, isLoggingIn } = useAuth();
   const [isKakaoIOS, setIsKakaoIOS] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
     
     const ua = navigator.userAgent;
@@ -55,6 +57,15 @@ const LandingPage: React.FC = () => {
           <p className="text-slate-500 font-bold">대시보드로 안전하게 이동 중입니다...</p>
         </div>
         <Navigate to="/dashboard" replace />
+      </div>
+    );
+  }
+
+  // Safety Wrapper: 클라이언트 마운트 전에는 빈 화면 또는 최소한의 로딩만 표시
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-brand-50 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
       </div>
     );
   }
