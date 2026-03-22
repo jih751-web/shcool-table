@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud, Ticket, Sun, Bell, Menu, Users } from 'lucide-react';
+import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud, Ticket, Sun, Bell, Menu, Users, Download, Share } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, collection, getDocs, writeBatch, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo } from '../types';
@@ -108,11 +108,23 @@ export default function DashboardPage() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todoInput, setTodoInput] = useState('');
   const [isMounted, setIsMounted] = useState(false);
+  
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showIOSModal, setShowIOSModal] = useState(false);
 
-  // 카카오톡 탈출 후 초기화 (강제 1회 새로고침)
   useEffect(() => {
     setIsMounted(true);
     
+    // 1. PWA 설치 이벤트 핸들러
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // 2. 카카오톡 탈출 후 초기화 (강제 1회 새로고침)
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const isFromKakao = params.get('from_kakaotalk') === 'true';
@@ -127,6 +139,10 @@ export default function DashboardPage() {
         window.location.reload();
       }
     }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -425,6 +441,27 @@ export default function DashboardPage() {
   };
 
 
+  // PWA 설치 핸들러
+  const handleInstallApp = async () => {
+    if (typeof window === 'undefined') return;
+
+    const ua = window.navigator.userAgent.toLowerCase();
+    const isIOS = /iphone|ipad|ipod/.test(ua);
+
+    if (isIOS) {
+      // iOS 전용 안내 모달 띄우기
+      setShowIOSModal(true);
+    } else if (deferredPrompt) {
+      // 안드로이드/데스크톱 설치 프롬프트 실행
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User response to the install prompt: ${outcome}`);
+      setDeferredPrompt(null);
+    } else {
+      alert('이미 설치되어 있거나 브라우저가 설치를 지원하지 않습니다.');
+    }
+  };
+
   // Safety Wrapper: 브라우저 환경이 준비되기 전에는 아무것도 렌더링하지 않음
   if (!isMounted) return null;
 
@@ -502,6 +539,13 @@ export default function DashboardPage() {
                           <UserPlus className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 나의 닉네임 설정
                         </button>
 
+                        <button 
+                          onClick={() => { handleInstallApp(); setIsSettingsOpen(false); }}
+                          className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-brand-600 hover:bg-brand-50 hover:text-brand-700 transition-all group"
+                        >
+                          <Download className="w-4 h-4 text-brand-400 group-hover:text-brand-600 transition-colors" /> 앱 다운로드 (PWA)
+                        </button>
+
                         <Link 
                           to="/mytimetable" 
                           className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
@@ -571,6 +615,13 @@ export default function DashboardPage() {
               >
                 <Cloud className="w-5 h-5" /> 규정 자료실
               </a>
+
+              <button 
+                onClick={() => { handleInstallApp(); setIsMenuOpen(false); }}
+                className="flex items-center gap-3 p-4 bg-brand-600 text-white rounded-2xl font-black shadow-lg shadow-brand-200 transition-all active:scale-95 border-2 border-brand-400"
+              >
+                <Download className="w-5 h-5" /> 앱 다운로드 (PWA)
+              </button>
             </div>
           </div>
         )}
@@ -1073,6 +1124,45 @@ export default function DashboardPage() {
                 className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all active:scale-95"
               >
                 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* iOS PWA 설치 안내 모달 */}
+      {showIOSModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm border-4 border-brand-500 overflow-hidden animate-in zoom-in-95 duration-500">
+            <div className="p-8 bg-brand-500 text-center text-white">
+              <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Share className="w-10 h-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-black tracking-tight leading-tight">
+                아이폰 앱 설치 방법
+              </h3>
+            </div>
+            
+            <div className="p-10 text-center space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-start gap-4 text-left">
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center font-black text-xs shrink-0 mt-1">1</div>
+                  <p className="text-slate-700 font-bold leading-relaxed">
+                    브라우저 하단의 <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-flex items-center gap-1"><Share className="w-3.5 h-3.5" />공유</span> 버튼을 누릅니다.
+                  </p>
+                </div>
+                <div className="flex items-start gap-4 text-left">
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center font-black text-xs shrink-0 mt-1">2</div>
+                  <p className="text-slate-700 font-bold leading-relaxed">
+                    메뉴를 아래로 내려 <span className="text-brand-600 font-black">'홈 화면에 추가'</span>를 선택해 주세요! 🚀
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowIOSModal(false)}
+                className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all active:scale-95"
+              >
+                확인했습니다
               </button>
             </div>
           </div>
