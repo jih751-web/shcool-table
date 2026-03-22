@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud } from 'lucide-react';
+import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud, Ticket, Sun, Bell, Menu } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, collection, getDocs, writeBatch, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo } from '../types';
@@ -32,6 +32,41 @@ const HealingQuoteWidget = () => {
       <p className="text-lg md:text-xl font-bold text-indigo-900 leading-relaxed whitespace-normal break-keep relative z-10" style={{ fontFamily: "'Nanum Myeongjo', serif" }}>
         {quote}
       </p>
+    </div>
+  );
+};
+
+// --- Quick Buttons Component ---
+const QuickButtons = () => {
+  return (
+    <div className="flex items-center gap-3 ml-auto animate-in fade-in slide-in-from-right-4 duration-1000">
+      <a
+        href="https://island.theksa.co.kr/"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="여객선 예매"
+        className="flex items-center justify-center w-10 h-10 bg-white rounded-full border border-indigo-100 text-indigo-600 shadow-sm hover:bg-indigo-50 hover:shadow-md transition-all group"
+      >
+        <Ticket className="w-5 h-5 group-hover:scale-110 transition-transform" />
+      </a>
+      <a
+        href="https://www.windy.com/"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="실시간 날씨"
+        className="flex items-center justify-center w-10 h-10 bg-white rounded-full border border-orange-100 text-orange-500 shadow-sm hover:bg-orange-50 hover:shadow-md transition-all group"
+      >
+        <Sun className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+      </a>
+      <a
+        href="https://www.ulleung.go.kr/ko/page.do?mnu_uid=2058"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="울릉 알리미"
+        className="flex items-center justify-center w-10 h-10 bg-white rounded-full border border-slate-100 text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group"
+      >
+        <Bell className="w-5 h-5 group-hover:animate-pulse transition-all" />
+      </a>
     </div>
   );
 };
@@ -71,6 +106,8 @@ export default function DashboardPage() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todoInput, setTodoInput] = useState('');
 
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   // [성능 최적화] PDF Base64 캐싱 (메모리 내)
 
   // 1. 기초 시간표(Base) 실시간 구독
@@ -107,38 +144,40 @@ export default function DashboardPage() {
     return () => unsubOverride();
   }, [user, currentDateStr]);
 
-  // 3. 오늘의 학사일정 실시간 구독 (0.1초 즉시 반영)
+  // 3. 오늘의 학사일정 실시간 구독 (신규: 기간 설정 지원)
   useEffect(() => {
-    setEventError(null); // 새로운 날짜 로드 시 에러 초기화
+    setEventError(null);
     
-    // query와 where를 사용하여 선택된 날짜('yyyy-MM-dd')와 정확히 일치하는 일정만 필터링
-    const q = query(collection(db, 'events'), where('date', '==', currentDateStr));
+    // 범위 쿼리를 위해 모든 일정을 가져와 클라이언트에서 필터링 (데이터 양이 적으므로 효율적)
+    const q = query(collection(db, 'events'));
     
-    // onSnapshot 실시간 리스너 강제 적용
     const unsubEvents = onSnapshot(q, (snapshot) => {
       const evs: SchoolEvent[] = [];
       snapshot.forEach(docSnap => {
-        evs.push({ id: docSnap.id, ...docSnap.data() } as SchoolEvent);
+        const data = docSnap.data() as SchoolEvent;
+        const id = docSnap.id;
+        
+        // 기간 체크 로직: 시작일 <= 오늘 <= 종료일
+        const isToday = (data.startDate && data.endDate)
+          ? (currentDateStr >= data.startDate && currentDateStr <= data.endDate)
+          : (data.date === currentDateStr);
+
+        if (isToday) {
+          evs.push({ ...data, id });
+        }
       });
       // 교시 순 정렬
       evs.sort((a, b) => a.periodStart - b.periodStart);
       
-      // [방어 코드] 데이터가 완전히 동일하면 업데이트 리렌더링 차단 (무한루프 방지)
       setDailyEvents(prev => {
         if (JSON.stringify(prev) === JSON.stringify(evs)) return prev;
         return evs;
       });
     }, (error) => {
       console.error("Dashboard Events onSnapshot error:", error);
-      // 색인 미생성 등의 문제 발생 시 UI에 피드백
-      if (error.code === 'failed-precondition') {
-        setEventError("색인을 생성 중이거나 데이터베이스 설정이 필요합니다.");
-      } else {
-        setEventError("일정을 불러오는 중 오류가 발생했습니다.");
-      }
+      setEventError("일정을 불러오는 중 오류가 발생했습니다.");
     });
 
-    // 메모리 누수 방지: 언마운트 또는 날짜 변경 시 구독 해제 필수
     return () => unsubEvents();
   }, [currentDateStr]);
 
@@ -353,28 +392,31 @@ export default function DashboardPage() {
             </div>
             <h1 className="text-xl font-black text-slate-800 tracking-tight">울릉중학교</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Link to="/global" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm">
-              <CalendarRange className="w-4 h-4" /> 기초 시간표 현황
+          <div className="hidden lg:flex items-center gap-2">
+            <Link to="/global" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
+              <CalendarRange className="w-4 h-4" /> 시간표 현황
             </Link>
-            <Link to="/rooms" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm">
+            <Link to="/rooms" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
               <MonitorPlay className="w-4 h-4" /> 특별실
             </Link>
-            <Link to="/events" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm">
+            <Link to="/events" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
               <Calendar className="w-4 h-4" /> 학사일정
             </Link>
-            <Link to="/status" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm">
+            <Link to="/status" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
               <Clock className="w-4 h-4" /> 교체현황
             </Link>
             <a 
               href="https://drive.google.com/drive/folders/1MasUNhkb4PhagYWGwpQlZzHod5xQa0fw?usp=sharing" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm"
+              className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap"
             >
               <Cloud className="w-4 h-4" /> 규정 자료실
             </a>
-            <div className="w-px h-5 bg-slate-200 mx-1"></div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="hidden lg:block w-px h-5 bg-slate-200 mx-1"></div>
             
             {/* 개인 설정함 (톱니바퀴 + 드롭다운) */}
             <div className="relative">
@@ -438,8 +480,43 @@ export default function DashboardPage() {
                 </>
               )}
             </div>
+            <button 
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+            >
+              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        {isMenuOpen && (
+          <div className="lg:hidden fixed inset-0 top-16 z-50 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white border-b border-slate-200 p-6 flex flex-col gap-4 animate-in slide-in-from-top-4 duration-300 shadow-2xl">
+              <Link to="/global" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100">
+                <CalendarRange className="w-5 h-5" /> 시간표 현황
+              </Link>
+              <Link to="/rooms" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100">
+                <MonitorPlay className="w-5 h-5" /> 특별실
+              </Link>
+              <Link to="/events" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100">
+                <Calendar className="w-5 h-5" /> 학사일정
+              </Link>
+              <Link to="/status" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100">
+                <Clock className="w-5 h-5" /> 교체현황
+              </Link>
+              <a 
+                href="https://drive.google.com/drive/folders/1MasUNhkb4PhagYWGwpQlZzHod5xQa0fw?usp=sharing" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100"
+              >
+                <Cloud className="w-5 h-5" /> 규정 자료실
+              </a>
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="flex-1 max-w-[1400px] w-full mx-auto p-4 md:p-8 shrink-0 flex flex-col items-center">
@@ -494,6 +571,9 @@ export default function DashboardPage() {
 
               {/* Healing Quote Widget (Now in Header Area) */}
               <HealingQuoteWidget />
+
+              {/* Quick Navigation Buttons */}
+              <QuickButtons />
             </div>
             <p className="text-slate-500 font-medium flex items-center gap-2">
               <Clock className="w-4 h-4" /> 일일 시간표 내역을 탐색하고 교체할 수 있습니다.
@@ -526,25 +606,24 @@ export default function DashboardPage() {
                 ) : (
                   <div className="flex flex-col gap-3">
                     {dailyEvents.map(ev => {
-                      const hasAnnouncement = !!ev?.announcement?.trim();
                       return (
                         <div 
                           key={ev.id} 
                           onClick={() => { setSelectedEventForDetail(ev); setIsEventDetailOpen(true); }}
-                          className={`p-4 rounded-2xl border flex flex-col gap-1.5 shadow-sm transition-all hover:shadow-md cursor-pointer group active:scale-[0.98] ${ev.type === 'EXTERNAL' ? 'bg-rose-50' : 'bg-white border-slate-200'}`}
+                          className={`p-4 rounded-2xl border flex flex-col gap-1.5 shadow-sm transition-all hover:shadow-md cursor-pointer group active:scale-[0.98] ${ev.type === 'EXTERNAL' ? 'bg-rose-50 border-rose-100 hover:bg-rose-100' : 'bg-white border-slate-200 hover:border-brand-300'}`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5">
                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-md tracking-tight ${ev.type === 'EXTERNAL' ? 'bg-rose-100 text-rose-700' : 'bg-brand-100 text-brand-700'}`}>
-                                {ev?.periodStart}교시 - {ev?.periodEnd}교시
+                                {ev.isAllDay ? '하루 종일' : `${ev.periodStart}교시 - ${ev.periodEnd}교시`}
                               </span>
-                              {hasAnnouncement && (
-                                <span className="flex items-center gap-1 text-[9px] font-black bg-white text-brand-600 border border-brand-100 px-1.5 py-0.5 rounded shadow-sm">
-                                  📝 메모
+                              {ev.startDate && ev.endDate && ev.startDate !== ev.endDate && (
+                                <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shadow-xs border border-slate-200">
+                                  {ev.startDate.slice(5)} ~ {ev.endDate.slice(5)}
                                 </span>
                               )}
                             </div>
-                            {ev?.type === 'EXTERNAL' && <span className="text-[10px] font-bold text-rose-500 bg-white px-1.5 py-0.5 rounded shadow-sm border border-rose-100">외부행사</span>}
+                            {ev?.type === 'EXTERNAL' && <span className="text-[10px] font-bold text-rose-500 bg-white px-1.5 py-0.5 rounded shadow-sm border border-rose-100 italic">OFF</span>}
                           </div>
                           <p className={`font-bold text-[15px] ${ev.type === 'EXTERNAL' ? 'text-rose-900' : 'text-slate-800'} group-hover:text-brand-700 transition-colors`}>{ev?.description}</p>
                         </div>
@@ -713,9 +792,12 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            
-            {/* Bottom Section: To-Do List */}
-            <div className="border-t border-slate-200 flex flex-col h-[300px]">
+          </div>
+
+          {/* Column 3: Assistant Panel */}
+          <div className="flex flex-col gap-6 sticky lg:top-24">
+            {/* To-Do List (Moved from Column 2) */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[300px]">
                <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0">
                  <div className="flex items-center gap-2">
                    <CheckCircle2 className="w-5 h-5 text-brand-600" />
@@ -726,7 +808,7 @@ export default function DashboardPage() {
                  </span>
                </div>
 
-               <div className="p-4 flex-1 overflow-hidden flex flex-col gap-4">
+               <div className="p-4 flex-1 overflow-hidden flex flex-col gap-4 bg-slate-50/30">
                  <form onSubmit={handleAddTodo} className="relative">
                    <input 
                      type="text"
@@ -756,10 +838,7 @@ export default function DashboardPage() {
                  </div>
                </div>
             </div>
-          </div>
 
-          {/* Column 3: Assistant Panel */}
-          <div className="flex flex-col gap-6 sticky lg:top-24">
             <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[480px] group/card transition-all hover:shadow-2xl">
               {/* Card Header (Sea Theme) */}
               <div className="bg-gradient-to-br from-blue-600 to-sky-400 p-8 flex flex-col items-center justify-center text-center gap-4 shrink-0 relative overflow-hidden">
@@ -901,22 +980,22 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">일자</label>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">일정 기간</label>
                   <p className="text-sm font-black text-slate-700 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-slate-400" />
-                    {format(new Date(selectedEventForDetail.date), 'yyyy년 M월 d일')}
+                    <Calendar className="w-4 h-4 text-brand-400" />
+                    {selectedEventForDetail.startDate && selectedEventForDetail.endDate && selectedEventForDetail.startDate !== selectedEventForDetail.endDate 
+                      ? `${selectedEventForDetail.startDate} ~ ${selectedEventForDetail.endDate}`
+                      : selectedEventForDetail.date}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">운영 교시</label>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">운영 시간</label>
                   <p className="text-sm font-black text-slate-700 flex items-center gap-2">
-                    <MonitorPlay className="w-4 h-4 text-slate-400" />
-                    {selectedEventForDetail.periodStart}교시 ~ {selectedEventForDetail.periodEnd}교시
+                    <MonitorPlay className="w-4 h-4 text-brand-400" />
+                    {selectedEventForDetail.isAllDay ? '하루 종일 (1~9교시)' : `${selectedEventForDetail.periodStart}교시 ~ ${selectedEventForDetail.periodEnd}교시`}
                   </p>
                 </div>
-              </div>
 
               <div className="space-y-2 pt-4 border-t border-slate-100">
                 <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">

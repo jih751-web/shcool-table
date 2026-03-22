@@ -18,8 +18,10 @@ const EventsPage: React.FC = () => {
     periodStart: 1,
     periodEnd: 7,
     description: '',
-    announcement: '', // 전발사항 필드 초기화
-    type: 'EXTERNAL'
+    announcement: '',
+    type: 'EXTERNAL',
+    isAllDay: false,
+    endDate: ''
   });
 
   // 삭제 확인 모달 상태
@@ -41,12 +43,21 @@ const EventsPage: React.FC = () => {
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDate || !newEvent.description) return;
+    
+    const startDateStr = format(selectedDate, 'yyyy-MM-dd');
+    const endDateStr = newEvent.endDate || startDateStr;
+
     try {
       await addDoc(collection(db, 'events'), {
         ...newEvent,
-        date: format(selectedDate, 'yyyy-MM-dd')
+        date: startDateStr, // 호환성 유지
+        startDate: startDateStr,
+        endDate: endDateStr,
+        periodStart: newEvent.isAllDay ? 1 : (newEvent.periodStart || 1),
+        periodEnd: newEvent.isAllDay ? 9 : (newEvent.periodEnd || 7)
       });
-      setNewEvent({ ...newEvent, description: '', announcement: '' });
+      setNewEvent({ ...newEvent, description: '', announcement: '', endDate: '', isAllDay: false });
+      setSelectedDate(null);
     } catch (err) {
       console.error(err);
     }
@@ -81,10 +92,15 @@ const EventsPage: React.FC = () => {
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart);
   const endDate = endOfWeek(monthEnd);
-  const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
-
   const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
-  const selectedDayEvents = events.filter(e => e.date === selectedDateStr).sort((a, b) => a.periodStart - b.periodStart);
+  const selectedDayEvents = events.filter(e => {
+    if (e.startDate && e.endDate) {
+      return selectedDateStr >= e.startDate && selectedDateStr <= e.endDate;
+    }
+    return e.date === selectedDateStr;
+  }).sort((a, b) => a.periodStart - b.periodStart);
+  
+  const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -124,7 +140,12 @@ const EventsPage: React.FC = () => {
           <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
             {calendarDays.map((day, i) => {
               const dayStr = format(day, 'yyyy-MM-dd');
-              const dayEvents = events.filter(e => e.date === dayStr).sort((a,b) => a.periodStart - b.periodStart);
+              const dayEvents = events.filter(e => {
+                if (e.startDate && e.endDate) {
+                  return dayStr >= e.startDate && dayStr <= e.endDate;
+                }
+                return e.date === dayStr;
+              }).sort((a,b) => a.periodStart - b.periodStart);
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isToday = isSameDay(day, new Date());
 
@@ -193,10 +214,19 @@ const EventsPage: React.FC = () => {
                   <div key={ev.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-xl bg-white shadow-sm hover:shadow transition-shadow">
                     <div className="flex flex-col gap-1.5">
                       <span className={`text-[10px] w-fit font-bold px-2 py-0.5 rounded-md tracking-tight ${ev.type === 'EXTERNAL' ? 'bg-rose-100 border border-rose-200 text-rose-700' : 'bg-indigo-100 border border-indigo-200 text-indigo-700'}`}>
-                        {ev.type === 'EXTERNAL' ? '외부 행사 (시간표 숨김)' : '교과 연계 행사 (배너 오버레이)'}
+                        {ev.type === 'EXTERNAL' ? '외부 행사' : '교과 연계'}
                       </span>
-                      <p className="font-bold text-slate-800 text-[16px]">{ev.description}</p>
-                      <p className="text-sm font-semibold text-brand-600 whitespace-nowrap">{ev.periodStart}교시 ~ {ev.periodEnd}교시</p>
+                      <p className="font-black text-slate-800 text-[16px]">{ev.description}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-slate-400">
+                          {ev.startDate && ev.endDate && ev.startDate !== ev.endDate 
+                            ? `${ev.startDate.slice(5)} ~ ${ev.endDate.slice(5)}` 
+                            : ev.date.slice(5)}
+                        </p>
+                        <p className="text-xs font-bold text-brand-600">
+                          {ev.isAllDay ? '하루 종일' : `${ev.periodStart}교시 ~ ${ev.periodEnd}교시`}
+                        </p>
+                      </div>
                     </div>
                     <button onClick={() => handleDelete(ev.id!)} className="p-2.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
                       <Trash2 className="w-5 h-5" />
@@ -227,14 +257,51 @@ const EventsPage: React.FC = () => {
                       <option value="CURRICULUM">교과 연계 행사 (기존 수업 유지 + 뱃지 표시)</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1.5">시작 교시</label>
-                    <input type="number" min="1" max="9" value={newEvent.periodStart} onChange={e => setNewEvent({...newEvent, periodStart: Number(e.target.value)})} required className="w-full border-slate-300 rounded-lg p-2.5 border font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none transition-shadow shadow-sm" />
+                   <div className="col-span-2 grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">시작일</label>
+                      <input 
+                        type="date" 
+                        value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                        readOnly
+                        className="w-full border-slate-300 rounded-lg p-2.5 border text-sm font-semibold text-slate-400 bg-slate-100 outline-none" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">종료일</label>
+                      <input 
+                        type="date" 
+                        min={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                        value={newEvent.endDate || (selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '')}
+                        onChange={e => setNewEvent({ ...newEvent, endDate: e.target.value })}
+                        className="w-full border-slate-300 rounded-lg p-2.5 border text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-brand-500 outline-none transition-shadow bg-white shadow-sm" 
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1.5">종료 교시</label>
-                    <input type="number" min="1" max="9" value={newEvent.periodEnd} onChange={e => setNewEvent({...newEvent, periodEnd: Number(e.target.value)})} required className="w-full border-slate-300 rounded-lg p-2.5 border font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none transition-shadow shadow-sm" />
+
+                  <div className="col-span-2 flex items-center gap-2 px-1 py-1">
+                    <input 
+                      type="checkbox" 
+                      id="isAllDay"
+                      checked={newEvent.isAllDay}
+                      onChange={e => setNewEvent({ ...newEvent, isAllDay: e.target.checked })}
+                      className="w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
+                    />
+                    <label htmlFor="isAllDay" className="text-sm font-bold text-slate-700 cursor-pointer">하루 종일 진행되는 행사입니다.</label>
                   </div>
+
+                  {!newEvent.isAllDay && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">시작 교시</label>
+                        <input type="number" min="1" max="9" value={newEvent.periodStart} onChange={e => setNewEvent({...newEvent, periodStart: Number(e.target.value)})} required className="w-full border-slate-300 rounded-lg p-2.5 border font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none transition-shadow shadow-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">종료 교시</label>
+                        <input type="number" min="1" max="9" value={newEvent.periodEnd} onChange={e => setNewEvent({...newEvent, periodEnd: Number(e.target.value)})} required className="w-full border-slate-300 rounded-lg p-2.5 border font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none transition-shadow shadow-sm" />
+                      </div>
+                    </>
+                  )}
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-600 mb-1.5">행사명</label>
                     <input type="text" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} required className="w-full border-slate-300 rounded-lg p-3 border text-sm font-bold text-slate-800 placeholder:text-slate-300 focus:ring-2 focus:ring-brand-500 outline-none transition-shadow shadow-sm" placeholder="예: 현장체험학습, 성교육 특강" />

@@ -25,7 +25,10 @@ export interface Timetable {
 
 export interface SchoolEvent {
   id?: string;
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD (기존 단일 날짜, 호환성 유지)
+  startDate?: string; // Phase 12 신규: 시작일 (YYYY-MM-DD)
+  endDate?: string;   // Phase 12 신규: 종료일 (YYYY-MM-DD)
+  isAllDay?: boolean; // Phase 12 신규: 하루 종일 여부
   periodStart: number;
   periodEnd: number;
   description: string;
