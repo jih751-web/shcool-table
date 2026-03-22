@@ -20,9 +20,11 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// 명시적으로 세션 유지 설정 (모바일 무한 로그인 루프 방지)
-setPersistence(auth, browserLocalPersistence).catch((err) => {
-  console.error("Firebase persistence error:", err);
-});
+// 명시적으로 세션 유지 설정 (서버 사이드 빌드 에러 방지 및 모바일 로그인 유지)
+if (typeof window !== 'undefined') {
+  setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.error("Firebase persistence error:", err);
+  });
+}
 
 export const googleProvider = new GoogleAuthProvider();
