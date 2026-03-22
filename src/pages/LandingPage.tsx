@@ -28,7 +28,16 @@ const LandingPage: React.FC = () => {
   };
 
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return (
+      <div className="min-h-screen bg-brand-50 flex flex-col items-center justify-center p-4">
+        <div className="text-center animate-in fade-in zoom-in duration-500">
+          <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-6" />
+          <h2 className="text-2xl font-black text-slate-800 mb-2">반갑습니다! ✨</h2>
+          <p className="text-slate-500 font-bold">대시보드로 안전하게 이동 중입니다...</p>
+        </div>
+        <Navigate to="/dashboard" replace />
+      </div>
+    );
   }
 
   return (

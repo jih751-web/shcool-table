@@ -40,8 +40,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let unsubProfile: (() => void) | undefined;
 
+    // 2. 인증 상태 변경 감지
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log("Auth State Changed:", currentUser ? `Logged in: ${currentUser.email}` : "Logged out");
       setUser(currentUser);
+      setIsLoggingIn(false);
       
       if (currentUser) {
         // 현재 로그인한 사용자의 상세 정보 구독
@@ -65,14 +68,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // 3. 리다이렉트 결과 처리 (모바일용)
+    console.log("Checking for Redirect Result...");
     getRedirectResult(auth)
-      .then(() => {
+      .then((result) => {
+        if (result?.user) {
+          console.log("Redirect Login Successful:", result.user.email);
+        } else {
+          console.log("No Redirect Result found or already handled.");
+        }
         setIsLoggingIn(false);
       })
       .catch((error) => {
         setIsLoggingIn(false);
         if (error.code !== 'auth/redirect-cancelled-by-user') {
           console.error("Redirect login result error:", error);
+          alert(`로그인 결과 처리 중 오류가 발생했습니다: ${error.message}`);
         }
       });
 
