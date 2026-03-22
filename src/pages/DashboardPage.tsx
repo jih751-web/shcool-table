@@ -109,40 +109,48 @@ export default function DashboardPage() {
   const [todoInput, setTodoInput] = useState('');
   const [isMounted, setIsMounted] = useState(false);
   
-  // PWA Install Prompt State
+  // PWA Install Prompt State (초안전 모드 관리)
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showIOSModal, setShowIOSModal] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     
-    // 1. PWA 설치 이벤트 핸들러
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
+    // 1. PWA 설치 및 환경 체크 (Ultra-Safe Wrapper)
+    try {
+      if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+        // 기기 감지 로직 격리
+        const ua = navigator.userAgent.toLowerCase();
+        setIsIOS(/iphone|ipad|ipod/.test(ua));
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        const handleBeforeInstallPrompt = (e: any) => {
+          e.preventDefault();
+          setDeferredPrompt(e);
+        };
 
-    // 2. 카카오톡 탈출 후 초기화 (강제 1회 새로고침)
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const isFromKakao = params.get('from_kakaotalk') === 'true';
-      const alreadyReloaded = sessionStorage.getItem('ulleung_reloaded_from_kakao') === 'true';
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-      if (isFromKakao && !alreadyReloaded) {
-        // 파라미터 제거 후 세션 표시하고 새로고침
-        sessionStorage.setItem('ulleung_reloaded_from_kakao', 'true');
-        params.delete('from_kakaotalk');
-        const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
-        window.history.replaceState({}, '', newUrl);
-        window.location.reload();
+        // 2. 카카오톡 탈출 후 초기화 (강제 1회 새로고침)
+        const params = new URLSearchParams(window.location.search);
+        const isFromKakao = params.get('from_kakaotalk') === 'true';
+        const alreadyReloaded = sessionStorage.getItem('ulleung_reloaded_from_kakao') === 'true';
+
+        if (isFromKakao && !alreadyReloaded) {
+          sessionStorage.setItem('ulleung_reloaded_from_kakao', 'true');
+          params.delete('from_kakaotalk');
+          const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+          window.history.replaceState({}, '', newUrl);
+          window.location.reload();
+        }
+
+        return () => {
+          window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        };
       }
+    } catch (err) {
+      console.error('PWA Initialization safely failed:', err);
     }
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
   }, []);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -441,24 +449,24 @@ export default function DashboardPage() {
   };
 
 
-  // PWA 설치 핸들러
+  // PWA 설치 핸들러 (Safety First)
   const handleInstallApp = async () => {
-    if (typeof window === 'undefined') return;
+    try {
+      if (typeof window === 'undefined') return;
 
-    const ua = window.navigator.userAgent.toLowerCase();
-    const isIOS = /iphone|ipad|ipod/.test(ua);
-
-    if (isIOS) {
-      // iOS 전용 안내 모달 띄우기
-      setShowIOSModal(true);
-    } else if (deferredPrompt) {
-      // 안드로이드/데스크톱 설치 프롬프트 실행
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to the install prompt: ${outcome}`);
-      setDeferredPrompt(null);
-    } else {
-      alert('이미 설치되어 있거나 브라우저가 설치를 지원하지 않습니다.');
+      if (isIOS) {
+        setShowIOSModal(true);
+      } else if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to install prompt: ${outcome}`);
+        setDeferredPrompt(null);
+      } else {
+        alert('이미 설치되어 있거나 브라우저에서 설치를 지원하지 않습니다.');
+      }
+    } catch (err) {
+      console.error('Install handler failed safely:', err);
+      alert('설치 과정에서 오류가 발생했습니다. 브라우저 설정에서 직접 설치해 주세요.');
     }
   };
 
@@ -539,12 +547,14 @@ export default function DashboardPage() {
                           <UserPlus className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 나의 닉네임 설정
                         </button>
 
-                        <button 
-                          onClick={() => { handleInstallApp(); setIsSettingsOpen(false); }}
-                          className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-brand-600 hover:bg-brand-50 hover:text-brand-700 transition-all group"
-                        >
-                          <Download className="w-4 h-4 text-brand-400 group-hover:text-brand-600 transition-colors" /> 앱 다운로드 (PWA)
-                        </button>
+                        {isMounted && (
+                          <button 
+                            onClick={() => { handleInstallApp(); setIsSettingsOpen(false); }}
+                            className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-brand-600 hover:bg-brand-50 hover:text-brand-700 transition-all group"
+                          >
+                            <Download className="w-4 h-4 text-brand-400 group-hover:text-brand-600 transition-colors" /> 앱 다운로드 (PWA)
+                          </button>
+                        )}
 
                         <Link 
                           to="/mytimetable" 
@@ -616,12 +626,14 @@ export default function DashboardPage() {
                 <Cloud className="w-5 h-5" /> 규정 자료실
               </a>
 
-              <button 
-                onClick={() => { handleInstallApp(); setIsMenuOpen(false); }}
-                className="flex items-center gap-3 p-4 bg-brand-600 text-white rounded-2xl font-black shadow-lg shadow-brand-200 transition-all active:scale-95 border-2 border-brand-400"
-              >
-                <Download className="w-5 h-5" /> 앱 다운로드 (PWA)
-              </button>
+              {isMounted && (
+                <button 
+                  onClick={() => { handleInstallApp(); setIsMenuOpen(false); }}
+                  className="flex items-center gap-3 p-4 bg-brand-600 text-white rounded-2xl font-black shadow-lg shadow-brand-200 transition-all active:scale-95 border-2 border-brand-400"
+                >
+                  <Download className="w-5 h-5" /> 앱 다운로드 (PWA)
+                </button>
+              )}
             </div>
           </div>
         )}
