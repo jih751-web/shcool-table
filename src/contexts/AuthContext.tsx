@@ -50,13 +50,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // 현재 로그인한 사용자의 상세 정보 구독
         unsubProfile = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
           if (docSnap.exists()) {
-            setUserData(docSnap.data() as Teacher);
+            const data = docSnap.data() as Teacher;
+            
+            // 차단된 유저 처리
+            if (data.isBlocked) {
+              alert("관리자에 의해 접근이 제한된 계정입니다.");
+              signOut(auth);
+              return;
+            }
+            
+            setUserData(data);
           } else {
-            setUserData({
+            // 신규 사용자 초기화
+            const initialData: Teacher = {
               uid: currentUser.uid,
               name: currentUser.displayName || '',
               email: currentUser.email || '',
-            });
+              isBlocked: false,
+              isAdmin: currentUser.email === 'jih751@gmail.com' || currentUser.email === 'test@example.com' // 초기 관리자 권한 부여
+            };
+            
+            setDoc(doc(db, 'users', currentUser.uid), initialData);
+            setUserData(initialData);
           }
         });
       } else {

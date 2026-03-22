@@ -3,6 +3,8 @@ export interface Teacher {
   name: string;
   email: string;
   nickname?: string;
+  isBlocked?: boolean;
+  isAdmin?: boolean;
 }
 
 export interface ClassSlot {

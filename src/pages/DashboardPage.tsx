@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud, Ticket, Sun, Bell, Menu } from 'lucide-react';
+import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud, Ticket, Sun, Bell, Menu, Users } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, collection, getDocs, writeBatch, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo } from '../types';
@@ -413,6 +413,12 @@ export default function DashboardPage() {
             >
               <Cloud className="w-4 h-4" /> 규정 자료실
             </a>
+
+            {userData?.isAdmin && (
+              <Link to="/admin/users" className="px-3 py-1.5 text-sm font-black text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg flex items-center gap-1.5 transition-all border border-rose-100 shadow-sm whitespace-nowrap">
+                <Users className="w-4 h-4" /> 사용자 관리
+              </Link>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

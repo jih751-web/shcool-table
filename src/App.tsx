@@ -10,6 +10,8 @@ import EventsPage from './pages/EventsPage';
 import SpecialRoomPage from './pages/SpecialRoomPage';
 import NotificationToast from './components/NotificationToast';
 
+import AdminUserPage from './pages/AdminUserPage';
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   
@@ -25,6 +27,20 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (!user) return <Navigate to="/" replace />;
+  
+  return (
+    <>
+      {children}
+      <NotificationToast />
+    </>
+  );
+};
+
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { userData, loading } = useAuth();
+  
+  if (loading) return null;
+  if (!userData?.isAdmin) return <Navigate to="/dashboard" replace />;
   
   return (
     <>
@@ -84,6 +100,14 @@ function AppRoutes() {
           <ProtectedRoute>
             <StatusPage />
           </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/users" 
+        element={
+          <AdminRoute>
+            <AdminUserPage />
+          </AdminRoute>
         } 
       />
     </Routes>
