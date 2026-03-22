@@ -59,7 +59,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return;
             }
             
-            setUserData(data);
+            // 마스터 관리자 이메일 고정 (jih751@gmail.com)
+            const updatedData = { 
+              ...data, 
+              isAdmin: data.email === 'jih751@gmail.com' 
+            };
+            setUserData(updatedData);
           } else {
             // 신규 사용자 초기화
             const initialData: Teacher = {
@@ -67,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               name: currentUser.displayName || '',
               email: currentUser.email || '',
               isBlocked: false,
-              isAdmin: currentUser.email === 'jih751@gmail.com' || currentUser.email === 'test@example.com' // 초기 관리자 권한 부여
+              isAdmin: currentUser.email === 'jih751@gmail.com' // 마스터 관리자만 자동 부여
             };
             
             setDoc(doc(db, 'users', currentUser.uid), initialData);

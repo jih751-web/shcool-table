@@ -413,79 +413,81 @@ export default function DashboardPage() {
             >
               <Cloud className="w-4 h-4" /> 규정 자료실
             </a>
-
-            {userData?.isAdmin && (
-              <Link to="/admin/users" className="px-3 py-1.5 text-sm font-black text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg flex items-center gap-1.5 transition-all border border-rose-100 shadow-sm whitespace-nowrap">
-                <Users className="w-4 h-4" /> 사용자 관리
-              </Link>
-            )}
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden lg:block w-px h-5 bg-slate-200 mx-1"></div>
-            
-            {/* 개인 설정함 (톱니바퀴 + 드롭다운) */}
-            <div className="relative">
-              <div 
-                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className={`flex items-center gap-2 pl-2 pr-3 py-1 rounded-full border transition-all cursor-pointer group hover:bg-white shadow-sm
-                  ${isSettingsOpen ? 'bg-white border-brand-500 ring-2 ring-brand-500/10' : 'bg-slate-50 border-slate-200'}
-                `}
-                title="개인 설정함"
-              >
-                <div className={`p-1.5 rounded-full shadow-inner border transition-colors
-                  ${isSettingsOpen ? 'bg-brand-50 border-brand-200 text-brand-600' : 'bg-white border-slate-100 text-slate-400 group-hover:text-brand-600'}
-                `}>
-                  <Settings className="w-4 h-4" />
-                </div>
-                <span className="text-xs font-black text-slate-600 tracking-tight">
-                  {userData?.nickname || user?.email?.split('@')[0]}
-                </span>
-              </div>
+            {user?.email === 'jih751@gmail.com' ? (
+              // 1. 최고 관리자(Admin) 전용: 톱니바퀴 드롭다운
+              <div className="relative">
+                <button 
+                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                  className={`p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95
+                    ${isSettingsOpen ? 'bg-brand-50 border-brand-200 text-brand-600 ring-4 ring-brand-500/10' : 'bg-white border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200'}
+                  `}
+                  title="관리자 설정"
+                >
+                  <Settings className={`w-5 h-5 ${isSettingsOpen ? 'rotate-90' : ''} transition-transform duration-300`} />
+                </button>
 
-              {isSettingsOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setIsSettingsOpen(false)}></div>
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
-                    <div className="px-4 py-2 border-b border-slate-50 mb-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">나의 설정</p>
-                    </div>
-                    
-                    <button 
-                      onClick={() => { setIsNicknameModalOpen(true); setIsSettingsOpen(false); }}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                    >
-                      <UserPlus className="w-4 h-4" /> 닉네임 설정
-                    </button>
+                {isSettingsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsSettingsOpen(false)}></div>
+                    <div className="absolute right-0 mt-3 w-56 bg-white rounded-[2rem] shadow-2xl border border-slate-100 py-3 z-50 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="px-5 py-2 border-b border-slate-50 mb-2">
+                        <p className="text-[10px] font-black text-brand-600 uppercase tracking-[0.2em]">Master Admin</p>
+                        <p className="text-xs font-bold text-slate-400 truncate">{user?.email}</p>
+                      </div>
+                      
+                      <Link 
+                        to="/admin/users" 
+                        className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
+                        onClick={() => setIsSettingsOpen(false)}
+                      >
+                        <Users className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 사용자 관리
+                      </Link>
 
-                    <Link 
-                      to="/mytimetable" 
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
-                      onClick={() => setIsSettingsOpen(false)}
-                    >
-                      <BookOpen className="w-4 h-4" /> 나의 시간표 설정
-                    </Link>
-                    
-                    {/* 관리자(Admin) 전용 메뉴: 샘플 데이터 삭제 */}
-                    {user?.email === 'jih751@gmail.com' && (
-                        <button 
+                      <button 
+                        onClick={() => { setIsNicknameModalOpen(true); setIsSettingsOpen(false); }}
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
+                      >
+                        <UserPlus className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 나의 닉네임 설정
+                      </button>
+
+                      <Link 
+                        to="/mytimetable" 
+                        className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
+                        onClick={() => setIsSettingsOpen(false)}
+                      >
+                        <BookOpen className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 기초 시간표 설정
+                      </Link>
+                      
+                      <button 
                         onClick={clearSampleData}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                        >
-                        <Database className="w-4 h-4" /> 샘플 데이터 삭제 (관리자)
-                        </button>
-                    )}
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-all group border-t border-slate-50 mt-2"
+                      >
+                        <Database className="w-4 h-4 opacity-50" /> 샘플 데이터 삭제
+                      </button>
 
-                    <button 
-                      onClick={() => { logout(); setIsSettingsOpen(false); }}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" /> 로그아웃
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+                      <button 
+                        onClick={() => { logout(); setIsSettingsOpen(false); }}
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-400 hover:bg-slate-50 hover:text-slate-900 transition-all group"
+                      >
+                        <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" /> 로그아웃
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              // 2. 일반 사용자: 단순 로그아웃 버튼 (톱니바퀴 숨김)
+              <button 
+                onClick={() => logout()}
+                className="p-2.5 rounded-2xl bg-white border border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm active:scale-95 group"
+                title="로그아웃"
+              >
+                <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+              </button>
+            )}
             <button 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
