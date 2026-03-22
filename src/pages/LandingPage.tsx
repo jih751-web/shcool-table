@@ -6,6 +6,7 @@ import { CalendarDays, AlertCircle, ClipboardCheck, Copy } from 'lucide-react';
 const LandingPage: React.FC = () => {
   const { user, signInWithGoogle, isLoggingIn } = useAuth();
   const [isKakaoIOS, setIsKakaoIOS] = useState(false);
+  const [isKakao, setIsKakao] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -16,18 +17,17 @@ const LandingPage: React.FC = () => {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
     
     try {
-      const ua = navigator.userAgent;
-      const isKakao = /KAKAOTALK/i.test(ua);
-      const isAndroid = /Android/i.test(ua);
-      const isIOS = /iPhone|iPad|iPod/i.test(ua);
+      const ua = navigator.userAgent.toLowerCase();
+      const kakaoUser = ua.includes('kakaotalk');
+      setIsKakao(kakaoUser);
 
-      if (isKakao) {
-        if (isAndroid) {
-          // 안드로이드 및 일반 카톡 탈출: 더 표준적이고 안전한 kakaotalk:// 스킴 사용
-          const externalUrl = 'kakaotalk://web/openExternalApp?url=' + encodeURIComponent(window.location.href + (window.location.search ? '&' : '?') + 'from_kakaotalk=true');
-          window.location.href = externalUrl;
-        } else if (isIOS) {
-          // iOS 카카오톡: 안내 팝업 표시 (Safari 유도)
+      if (kakaoUser) {
+        // 모든 카톡 환경: 최신 표준 kakaotalk:// 스킴 사용 (자동 탈출 시도)
+        const externalUrl = 'kakaotalk://web/openExternalApp?url=' + encodeURIComponent(window.location.href);
+        window.location.href = externalUrl;
+        
+        // iOS의 경우 별도의 안내 팝업도 함께 준비 (자동 탈출이 안 될 때를 대비)
+        if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod')) {
           setIsKakaoIOS(true);
         }
       }
@@ -126,6 +126,16 @@ const LandingPage: React.FC = () => {
             스마트 공강 매칭을 위해<br />
             <span className="text-slate-900">구글 로그인이 필요합니다.</span>
           </p>
+
+          {isKakao && (
+            <div className="mb-6 p-4 bg-rose-50 border-2 border-rose-200 rounded-2xl animate-pulse">
+              <p className="text-rose-600 text-sm font-black leading-relaxed">
+                ⚠️ 카카오톡에서는 로그인이 안 됩니다.<br />
+                우측 하단의 <span className="bg-rose-100 px-1.5 py-0.5 rounded text-rose-700">[⋮]</span> 버튼을 눌러<br />
+                <span className="underline decoration-2 underline-offset-4">'다른 브라우저로 열기'</span>를 선택해 주세요!
+              </p>
+            </div>
+          )}
 
           <button
             onClick={signInWithGoogle}
