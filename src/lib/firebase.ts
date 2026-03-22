@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -13,18 +13,11 @@ const firebaseConfig = {
   measurementId: "G-F0NXHWFD3L"
 };
 
-// 싱글톤 패턴으로 초기화 (HMR 등으로 인한 중복 초기화 방지)
+// Firebase v9+ initialization (Standard Web SDK)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-
-// 명시적으로 세션 유지 설정 (서버 사이드 빌드 에러 방지 및 모바일 로그인 유지)
-if (typeof window !== 'undefined') {
-  setPersistence(auth, browserLocalPersistence).catch((err) => {
-    console.error("Firebase persistence error:", err);
-  });
-}
 
 export const googleProvider = new GoogleAuthProvider();
