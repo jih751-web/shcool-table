@@ -68,26 +68,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // 3. 리다이렉트 결과 처리 (모바일용)
-    console.log("Checking for Redirect Result...");
-    getRedirectResult(auth)
-      .then((result) => {
+    const handleRedirectResult = async () => {
+      try {
+        console.log("Checking for Redirect Result...");
+        const result = await getRedirectResult(auth);
         if (result?.user) {
           console.log("Redirect Login Successful:", result.user.email);
         } else {
           console.log("No Redirect Result found or already handled.");
         }
-        setIsLoggingIn(false);
-      })
-      .catch((error) => {
-        setIsLoggingIn(false);
+      } catch (error: any) {
         if (error.code !== 'auth/redirect-cancelled-by-user') {
           console.error("Redirect login result error:", error);
-          alert(`로그인 결과 처리 중 오류가 발생했습니다: ${error.message}`);
+          // 치명적 에러가 아니므로 alert만 띄우고 앱은 죽이지 않음
+          setTimeout(() => alert(`로그인 결과 처리 중 오류가 발생했습니다: ${error.message}`), 500);
         }
-      });
+      } finally {
+        setIsLoggingIn(false);
+      }
+    };
+
+    handleRedirectResult();
 
     return () => {
-      unsubscribe();
+      if (unsubscribe) unsubscribe();
       if (unsubProfile) unsubProfile();
     };
   }, []);
