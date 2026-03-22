@@ -105,6 +105,20 @@ export default function DashboardPage() {
   // Todo 상태
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todoInput, setTodoInput] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
+
+  // 카카오톡 탈출 후 초기화 (강제 1회 새로고침)
+  useEffect(() => {
+    setIsMounted(true);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('from_kakaotalk') === 'true') {
+      // 파라미터 제거 후 새로고침 (무한 루프 방지)
+      params.delete('from_kakaotalk');
+      const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+      window.history.replaceState({}, '', newUrl);
+      window.location.reload();
+    }
+  }, []);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -404,7 +418,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {!user && (
+      {(!user || !isMounted) && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
           <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
           <p className="text-sm font-bold text-slate-400 animate-pulse">인증 정보를 확인 중입니다...</p>

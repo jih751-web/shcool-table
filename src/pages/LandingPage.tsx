@@ -17,8 +17,10 @@ const LandingPage: React.FC = () => {
     if (isKakao) {
       if (isAndroid) {
         // 안드로이드 카카오톡: 크롬으로 자동 탈출
-        const url = window.location.href.replace(/https?:\/\//i, '');
-        window.location.href = `intent://${url}#Intent;scheme=https;package=com.android.chrome;end;`;
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('from_kakaotalk', 'true');
+        const encodedUrl = currentUrl.href.replace(/https?:\/\//i, '');
+        window.location.href = `intent://${encodedUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
       } else if (isIOS) {
         // iOS 카카오톡: 안내 팝업 표시
         setIsKakaoIOS(true);
