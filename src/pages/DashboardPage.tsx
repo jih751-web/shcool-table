@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud, Ticket, Sun, Bell, Menu, Users } from 'lucide-react';
 import { db } from '../lib/firebase';
@@ -107,6 +107,26 @@ export default function DashboardPage() {
   const [todoInput, setTodoInput] = useState('');
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  // 드롭다운 외부 클릭 감지 (모바일 대응)
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    
+    if (isSettingsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isSettingsOpen]);
 
   // [성능 최적화] PDF Base64 캐싱 (메모리 내)
 
@@ -384,6 +404,12 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      {!user && (
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
+          <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
+          <p className="text-sm font-bold text-slate-400 animate-pulse">인증 정보를 확인 중입니다...</p>
+        </div>
+      )}
       <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-[1200px] mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -418,66 +444,65 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             {user?.email === 'jih751@gmail.com' ? (
               // 1. 최고 관리자(Admin) 전용: 톱니바퀴 드롭다운
-              <div className="relative">
-                <button 
-                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                  className={`p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95
-                    ${isSettingsOpen ? 'bg-brand-50 border-brand-200 text-brand-600 ring-4 ring-brand-500/10' : 'bg-white border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200'}
-                  `}
-                  title="관리자 설정"
-                >
-                  <Settings className={`w-5 h-5 ${isSettingsOpen ? 'rotate-90' : ''} transition-transform duration-300`} />
-                </button>
+                <div className="relative" ref={settingsRef}>
+                  <button 
+                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                    className={`p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95
+                      ${isSettingsOpen ? 'bg-brand-50 border-brand-200 text-brand-600 ring-4 ring-brand-500/10' : 'bg-white border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200'}
+                    `}
+                    title="관리자 설정"
+                  >
+                    <Settings className={`w-5 h-5 ${isSettingsOpen ? 'rotate-90' : ''} transition-transform duration-300`} />
+                  </button>
 
-                {isSettingsOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsSettingsOpen(false)}></div>
-                    <div className="absolute right-0 mt-3 w-56 bg-white rounded-[2rem] shadow-2xl border border-slate-100 py-3 z-50 animate-in fade-in zoom-in-95 duration-200">
-                      <div className="px-5 py-2 border-b border-slate-50 mb-2">
-                        <p className="text-[10px] font-black text-brand-600 uppercase tracking-[0.2em]">Master Admin</p>
-                        <p className="text-xs font-bold text-slate-400 truncate">{user?.email}</p>
+                  {isSettingsOpen && (
+                    <>
+                      <div className="absolute right-0 mt-3 w-56 bg-white rounded-[2rem] shadow-2xl border border-slate-100 py-3 z-50 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="px-5 py-2 border-b border-slate-50 mb-2">
+                          <p className="text-[10px] font-black text-brand-600 uppercase tracking-[0.2em]">Master Admin</p>
+                          <p className="text-xs font-bold text-slate-400 truncate">{user?.email}</p>
+                        </div>
+                        
+                        <Link 
+                          to="/admin/users" 
+                          className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
+                          onClick={() => setIsSettingsOpen(false)}
+                        >
+                          <Users className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 사용자 관리
+                        </Link>
+
+                        <button 
+                          onClick={() => { setIsNicknameModalOpen(true); setIsSettingsOpen(false); }}
+                          className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
+                        >
+                          <UserPlus className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 나의 닉네임 설정
+                        </button>
+
+                        <Link 
+                          to="/mytimetable" 
+                          className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
+                          onClick={() => setIsSettingsOpen(false)}
+                        >
+                          <BookOpen className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 기초 시간표 설정
+                        </Link>
+                        
+                        <button 
+                          onClick={clearSampleData}
+                          className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-all group border-t border-slate-50 mt-2"
+                        >
+                          <Database className="w-4 h-4 opacity-50" /> 샘플 데이터 삭제
+                        </button>
+
+                        <button 
+                          onClick={() => { logout(); setIsSettingsOpen(false); }}
+                          className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-400 hover:bg-slate-50 hover:text-slate-900 transition-all group"
+                        >
+                          <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" /> 로그아웃
+                        </button>
                       </div>
-                      
-                      <Link 
-                        to="/admin/users" 
-                        className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
-                        onClick={() => setIsSettingsOpen(false)}
-                      >
-                        <Users className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 사용자 관리
-                      </Link>
-
-                      <button 
-                        onClick={() => { setIsNicknameModalOpen(true); setIsSettingsOpen(false); }}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
-                      >
-                        <UserPlus className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 나의 닉네임 설정
-                      </button>
-
-                      <Link 
-                        to="/mytimetable" 
-                        className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
-                        onClick={() => setIsSettingsOpen(false)}
-                      >
-                        <BookOpen className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 기초 시간표 설정
-                      </Link>
-                      
-                      <button 
-                        onClick={clearSampleData}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-all group border-t border-slate-50 mt-2"
-                      >
-                        <Database className="w-4 h-4 opacity-50" /> 샘플 데이터 삭제
-                      </button>
-
-                      <button 
-                        onClick={() => { logout(); setIsSettingsOpen(false); }}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-400 hover:bg-slate-50 hover:text-slate-900 transition-all group"
-                      >
-                        <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" /> 로그아웃
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+                    </>
+                  )}
+                </div>
             ) : (
               // 2. 일반 사용자: 단순 로그아웃 버튼 (톱니바퀴 숨김)
               <button 
