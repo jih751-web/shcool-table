@@ -89,6 +89,7 @@ const AdminUserPage: React.FC = () => {
       await batch.commit();
       
       console.log(`Successfully kicked user ${userName} and cleaned up all data.`);
+      alert(`${userName} 선생님이 추방되었습니다. 관련 데이터가 모두 삭제되었습니다.`);
       
       // 4. 화면 즉시 갱신
       // AdminUserPage는 이미 onSnapshot으로 users 컬렉션을 구독 중이므로, 

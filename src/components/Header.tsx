@@ -47,12 +47,13 @@ const Header: React.FC = () => {
       }
     };
     if (isSettingsOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('touchstart', handleClickOutside);
+      // 'click'을 사용하여 드롭다운 내부 버튼의 onClick이 먼저 처리되도록 함
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('touchend', handleClickOutside);
     }
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('touchend', handleClickOutside);
     };
   }, [isSettingsOpen]);
 
