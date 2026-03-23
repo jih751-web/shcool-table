@@ -43,7 +43,11 @@ const AdminUserPage: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (targetUserId: string, userName: string) => {
+  const handleDeleteUser = async (e: React.MouseEvent, targetUserId: string, userName: string) => {
+    // 1-1. 이벤트 전파 및 기본 동작 차단 (팝업 증발 방지 필수)
+    e.preventDefault();
+    e.stopPropagation();
+
     // 0. 버튼 클릭 확인 로그 (요청 사항)
     console.log("추방 버튼 클릭됨: ", targetUserId);
 
@@ -52,52 +56,54 @@ const AdminUserPage: React.FC = () => {
       return;
     }
 
-    if (!window.confirm("정말 이 사용자를 추방하시겠습니까? 관련된 모든 데이터가 영구 삭제됩니다.")) return;
+    // 1-2. 미세 지연 실행 (렌더링 사이클과 분리하여 팝업 유지)
+    setTimeout(async () => {
+      if (!window.confirm("정말 이 사용자를 추방하시겠습니까? 관련된 모든 데이터가 영구 삭제됩니다.")) return;
 
-    try {
-      console.log("--- 추방 및 연쇄 삭제 시작 ---");
+      try {
+        console.log("--- 추방 및 연쇄 삭제 시작 ---");
 
-      // 1단계: users 컬렉션에서 해당 사용자 문서 진짜로 삭제
-      await deleteDoc(doc(db, "users", targetUserId));
-      console.log("1단계: 사용자 프로필 삭제 완료");
+        // 1단계: users 컬렉션에서 해당 사용자 문서 진짜로 삭제
+        await deleteDoc(doc(db, "users", targetUserId));
+        console.log("1단계: 사용자 프로필 삭제 완료");
 
-      // 2단계: 연쇄 삭제 (timetables, reservations, overrides)
-      const deletePromises: Promise<void>[] = [];
+        // 2단계: 연쇄 삭제 (timetables, reservations, overrides)
+        const deletePromises: Promise<void>[] = [];
 
-      // (1) timetables 삭제 (ID 기반 및 필드 기반 모두 체크)
-      // 보통 문서 ID가 UID이므로 즉시 삭제 추가
-      deletePromises.push(deleteDoc(doc(db, "timetables", targetUserId)));
+        // (1) timetables 삭제 (ID 기반 및 필드 기반 모두 체크)
+        deletePromises.push(deleteDoc(doc(db, "timetables", targetUserId)));
 
-      // (2) reservations 연쇄 삭제
-      const reservationsRef = collection(db, "reservations");
-      const qRes = query(reservationsRef, where("userId", "==", targetUserId));
-      const resSnap = await getDocs(qRes);
-      resSnap.forEach((document) => {
-        deletePromises.push(deleteDoc(doc(db, "reservations", document.id)));
-      });
+        // (2) reservations 연쇄 삭제
+        const reservationsRef = collection(db, "reservations");
+        const qRes = query(reservationsRef, where("userId", "==", targetUserId));
+        const resSnap = await getDocs(qRes);
+        resSnap.forEach((document) => {
+          deletePromises.push(deleteDoc(doc(db, "reservations", document.id)));
+        });
 
-      // (3) overrides 연쇄 삭제
-      const overridesRef = collection(db, "overrides");
-      const qOvr = query(overridesRef, where("teacherId", "==", targetUserId));
-      const ovrSnap = await getDocs(qOvr);
-      ovrSnap.forEach((document) => {
-        deletePromises.push(deleteDoc(doc(db, "overrides", document.id)));
-      });
+        // (3) overrides 연쇄 삭제
+        const overridesRef = collection(db, "overrides");
+        const qOvr = query(overridesRef, where("teacherId", "==", targetUserId));
+        const ovrSnap = await getDocs(qOvr);
+        ovrSnap.forEach((document) => {
+          deletePromises.push(deleteDoc(doc(db, "overrides", document.id)));
+        });
 
-      // 모든 삭제 작업 병렬 실행
-      await Promise.all(deletePromises);
-      console.log("2단계: 연쇄 데이터(시간표, 예약 등) 삭제 완료");
+        // 모든 삭제 작업 병렬 실행
+        await Promise.all(deletePromises);
+        console.log("2단계: 연쇄 데이터(시간표, 예약 등) 삭제 완료");
 
-      // 3단계: 화면 새로고침 없이 즉시 목록에서 제거 (상태 업데이트)
-      setUsers(prev => prev.filter(user => user.uid !== targetUserId));
-      
-      console.log("추방 및 연쇄 삭제 완전 성공");
-      alert(`${userName} 선생님의 모든 데이터가 성공적으로 삭제되었습니다.`);
+        // 3단계: 화면 새로고침 없이 즉시 목록에서 제거 (상태 업데이트)
+        setUsers(prev => prev.filter(user => user.uid !== targetUserId));
+        
+        console.log("추방 및 연쇄 삭제 완전 성공");
+        alert(`${userName} 선생님의 모든 데이터가 성공적으로 삭제되었습니다.`);
 
-    } catch (error) {
-      console.error("추방 로직 에러: ", error);
-      alert("추방 처리 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
-    }
+      } catch (error) {
+        console.error("추방 로직 에러: ", error);
+        alert("추방 처리 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
+      }
+    }, 10);
   };
 
   const filteredUsers = users.filter(u => 
@@ -230,7 +236,7 @@ const AdminUserPage: React.FC = () => {
                           </button>
                           
                           <button
-                            onClick={() => handleDeleteUser(user.uid, user.name)}
+                            onClick={(e) => handleDeleteUser(e, user.uid, user.name)}
                             disabled={user.uid === userData?.uid}
                             className="p-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 shadow-sm shadow-rose-200 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                             title="추방(삭제)하기"
