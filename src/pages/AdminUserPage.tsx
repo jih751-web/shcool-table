@@ -43,38 +43,60 @@ const AdminUserPage: React.FC = () => {
   };
 
   const kickUser = async (uid: string, userName: string) => {
+    console.log("Kick button clicked for user:", userName, uid);
+
     if (uid === userData?.uid) {
       alert("자기 자신을 추방할 수 없습니다.");
       return;
     }
 
-    if (!confirm(`정말 [${userName}] 사용자를 추방(삭제)하시겠습니까?\n이 작업은 되돌릴 수 없으며 모든 사용자 데이터가 삭제됩니다.`)) return;
+    // 1. 확인 팝업창 띄우기 (요청 문구로 수정)
+    const proceed = window.confirm("정말 이 사용자를 추방하시겠습니까? 등록된 시간표와 예약 정보 등 모든 데이터가 영구적으로 삭제됩니다.");
+    if (!proceed) return;
 
     try {
       const batch = writeBatch(db);
 
-      // 1. 사용자 문서 삭제
+      // 2. 연쇄 삭제 로직 (Batch 사용)
+      
+      // (1) users 컬렉션에서 해당 사용자의 문서 삭제
       batch.delete(doc(db, 'users', uid));
 
-      // 2. 기초 시간표 문서 삭제 (있는 경우)
+      // (2) timetables 컬렉션에서 해당 사용자의 시간표 삭제 (문서 ID가 uid인 경우)
+      // 존재 여부 확인 후 삭제 (batch.delete는 문서가 없어도 에러를 내지 않지만, 명시적 관리를 위해)
       batch.delete(doc(db, 'timetables', uid));
 
-      // 3. 오버라이드 데이터 삭제 (해당 사용자 ID로 된 모든 데이터)
-      const overridesRef = collection(db, 'overrides');
-      const q = query(overridesRef, where('teacherId', '==', uid));
-      const querySnapshot = await getDocs(q);
+      // (3) reservations 컬렉션에서 해당 사용자가 등록한 데이터 삭제
+      // reservations는 문서 ID가 uid가 아닐 수 있으므로 쿼리하여 삭제
+      const reservationsRef = collection(db, 'reservations');
+      const qRes = query(reservationsRef, where('userId', '==', uid));
+      const queryResSnapshot = await getDocs(qRes);
       
-      querySnapshot.forEach((doc) => {
+      queryResSnapshot.forEach((doc) => {
         batch.delete(doc.ref);
       });
 
-      // 4. 일괄 실행 (Batch Commit)
+      // (4) 기타 관련 데이터 (예: overrides) 연쇄 삭제
+      const overridesRef = collection(db, 'overrides');
+      const qOvr = query(overridesRef, where('teacherId', '==', uid));
+      const queryOvrSnapshot = await getDocs(qOvr);
+      
+      queryOvrSnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      // 3. 일괄 실행 (Batch Commit)
       await batch.commit();
       
-      // onSnapshot이 자동으로 상태를 업데이트하므로 별도의 setUsers는 필요 없음
+      console.log(`Successfully kicked user ${userName} and cleaned up all data.`);
+      
+      // 4. 화면 즉시 갱신
+      // AdminUserPage는 이미 onSnapshot으로 users 컬렉션을 구독 중이므로, 
+      // Firestore에서 문서가 삭제되면 목록에서 자동으로 사라집니다.
+      
     } catch (error) {
-      console.error("Error deleting user and related data:", error);
-      alert("사용자 및 관련 데이터 삭제에 실패했습니다.");
+      console.error("Error during cascading delete:", error);
+      alert("데이터 삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     }
   };
 
