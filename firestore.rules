@@ -8,6 +8,16 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // 0. 사용자 프로필 (users 컬렉션)
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      // 본인 문서: 생성/수정 허용
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      // 삭제: 본인 또는 관리자(jih751@gmail.com)만 허용
+      allow delete: if request.auth != null 
+                    && (request.auth.uid == uid || request.auth.token.email == 'jih751@gmail.com');
+    }
+    
     // 1. 시간표 콜렉션 (핵심 보안 적용)
     match /timetables/{uid} {
       allow read: if request.auth != null;
@@ -25,11 +35,20 @@ service cloud.firestore {
                       || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schedule'])
                     );
                     
-      // 삭제: 관리자(jih751@gmail.com)만 샘플 데이터 정리를 위해 허용
+      // 삭제: 관리자(jih751@gmail.com)만 허용
       allow delete: if request.auth != null && request.auth.token.email == 'jih751@gmail.com';
     }
     
-    // 2. 교체 기록 및 알림 (누구나 쓰기 가능해야 상호 공강 요청/알림 전송 가능)
+    // 2. 변동 시간표 (overrides 컬렉션)
+    match /overrides/{overrideId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null;
+      // 삭제: 본인 또는 관리자
+      allow delete: if request.auth != null 
+                    && (resource.data.teacherId == request.auth.uid || request.auth.token.email == 'jih751@gmail.com');
+    }
+    
+    // 3. 교체 기록 및 알림 (누구나 쓰기 가능해야 상호 공강 요청/알림 전송 가능)
     match /replacements/{repId} {
       allow read, write: if request.auth != null;
     }
@@ -39,14 +58,27 @@ service cloud.firestore {
       allow update: if request.auth != null && resource.data.targetUid == request.auth.uid;
     }
     
-    // 3. 특별실 예약 & 학사 일정
+    // 4. 특별실 예약 & 학사 일정
     match /room_bookings/{bookingId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
     match /events/{eventId} {
-      allow read, write: if request.auth != null; // 학사 일정은 로그인한 교사 누구나 등록 가능
+      allow read, write: if request.auth != null;
+    }
+    
+    // 5. 할 일 목록 (todos)
+    match /todos/{todoId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
+    // 6. 예약 (reservations - 레거시 호환)
+    match /reservations/{resId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
   }
 }

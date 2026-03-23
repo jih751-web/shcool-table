@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth, googleProvider, db } from '../lib/firebase';
-import { doc, onSnapshot, setDoc, collection } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, collection, writeBatch, getDoc } from 'firebase/firestore';
 import type { Teacher } from '../types';
 
 interface AuthContextType {
@@ -125,12 +125,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateNickname = async (nickname: string) => {
     if (!user) return;
     try {
-      await setDoc(doc(db, 'users', user.uid), {
-        nickname,
+      const batch = writeBatch(db);
+      const userRef = doc(db, 'users', user.uid);
+      const timetableRef = doc(db, 'timetables', user.uid);
+
+      // 1. users 컬렉션 업데이트 (nickname 필드와 name 필드 모두 동기화)
+      batch.set(userRef, {
+        nickname: nickname,
+        name: nickname, // 앱 전체에서 name 필드를 주로 사용하므로 함께 업데이트
         uid: user.uid,
-        name: user.displayName || '',
         email: user.email || ''
       }, { merge: true });
+
+      // 2. timetables 컬렉션 업데이트 (존재할 경우에만)
+      const ttSnap = await getDoc(timetableRef);
+      if (ttSnap.exists()) {
+        batch.update(timetableRef, { 
+          name: nickname 
+        });
+      }
+
+      // 3. (추가) overrides 등 다른 컬렉션에 이름이 저장된 경우에도 업데이트 권장
+      // 여기서는 일단 가장 핵심인 users와 timetables를 확실히 처리합니다.
+
+      await batch.commit();
+      console.log("Nickname and related data updated successfully");
     } catch (error) {
       console.error("Update nickname failed:", error);
       throw error;

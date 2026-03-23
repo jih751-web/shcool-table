@@ -17,12 +17,15 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { clearSampleData } from '../utils/clearSampleData';
+import NicknameModal from './NicknameModal';
+import { UserCircle } from 'lucide-react';
 
 const Header: React.FC = () => {
   const { userData, logout } = useAuth();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
   const handleClearSampleData = async () => {
@@ -97,44 +100,57 @@ const Header: React.FC = () => {
         <div className="flex items-center gap-4">
 
           <div className="flex items-center gap-2">
-            {userData?.isAdmin ? (
-              <div className="relative" ref={settingsRef}>
-                <button 
-                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                  className={`p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95
-                    ${isSettingsOpen ? 'bg-brand-50 border-brand-200 text-brand-600 ring-4 ring-brand-500/10' : 'bg-white border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200'}
-                  `}
-                >
-                  <Settings className={`w-5 h-5 ${isSettingsOpen ? 'rotate-90' : ''} transition-transform duration-300`} />
-                </button>
-                {isSettingsOpen && (
-                  <div className="absolute right-0 mt-3 w-56 bg-white rounded-[2rem] shadow-2xl border border-slate-100 py-3 z-50">
-                    <Link to="/admin/users" className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700" onClick={() => setIsSettingsOpen(false)}>
-                      <Users className="w-4 h-4" /> 사용자 관리
-                    </Link>
-                    <button 
-                      onClick={handleClearSampleData} 
-                      disabled={isDeleting}
-                      className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-all disabled:opacity-50"
-                    >
-                      {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      {isDeleting ? '삭제 중...' : '샘플 데이터 삭제'}
-                    </button>
-                    <div className="border-t border-slate-100 my-1" />
-                    <button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-400 hover:bg-slate-50 hover:text-slate-900 transition-all">
-                      <LogOut className="w-4 h-4" /> 로그아웃
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
+            <div className="relative" ref={settingsRef}>
               <button 
-                onClick={() => logout()}
-                className="p-2.5 rounded-2xl bg-white border border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm active:scale-95 group"
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className={`p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95
+                  ${isSettingsOpen ? 'bg-brand-50 border-brand-200 text-brand-600 ring-4 ring-brand-500/10' : 'bg-white border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200'}
+                `}
               >
-                <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                <Settings className={`w-5 h-5 ${isSettingsOpen ? 'rotate-90' : ''} transition-transform duration-300`} />
               </button>
-            )}
+              {isSettingsOpen && (
+                <div className="absolute right-0 mt-3 w-56 bg-white rounded-[2rem] shadow-2xl border border-slate-100 py-3 z-50 overflow-hidden">
+                  <div className="px-5 py-2 mb-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Settings</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setIsNicknameModalOpen(true);
+                      setIsSettingsOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all"
+                  >
+                    <UserCircle className="w-4 h-4" /> 내 닉네임 변경
+                  </button>
+                  
+                  {userData?.isAdmin && (
+                    <>
+                      <div className="border-t border-slate-100 my-1" />
+                      <div className="px-5 py-2 mb-1">
+                        <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest leading-none">Admin Only</p>
+                      </div>
+                      <Link to="/admin/users" className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700" onClick={() => setIsSettingsOpen(false)}>
+                        <Users className="w-4 h-4" /> 사용자 관리
+                      </Link>
+                      <button 
+                        onClick={handleClearSampleData} 
+                        disabled={isDeleting}
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-all disabled:opacity-50"
+                      >
+                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        {isDeleting ? '삭제 중...' : '샘플 데이터 삭제'}
+                      </button>
+                    </>
+                  )}
+                  <div className="border-t border-slate-100 my-1" />
+                  <button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-400 hover:bg-slate-50 hover:text-slate-900 transition-all">
+                    <LogOut className="w-4 h-4" /> 로그아웃
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
@@ -144,6 +160,11 @@ const Header: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <NicknameModal 
+        isOpen={isNicknameModalOpen} 
+        onClose={() => setIsNicknameModalOpen(false)} 
+      />
 
       {/* Mobile Menu */}
       {isMenuOpen && (
