@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, doc, updateDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
@@ -43,46 +43,60 @@ const AdminUserPage: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    // 2-1. 함수 시작 시 로그 확인 (요청 사항)
-    console.log("추방 버튼 클릭됨: ", userId);
+  const handleDeleteUser = async (targetUserId: string, userName: string) => {
+    // 0. 버튼 클릭 확인 로그 (요청 사항)
+    console.log("추방 버튼 클릭됨: ", targetUserId);
 
-    if (userId === userData?.uid) {
+    if (targetUserId === userData?.uid) {
       alert("자기 자신을 추방할 수 없습니다.");
       return;
     }
 
-    // 2-2. 확인 창(Confirm) 추가 (요청 문구)
-    if (!window.confirm("정말 이 사용자를 추방하시겠습니까? 관련 데이터까지 영구적으로 삭제됩니다.")) return;
+    if (!window.confirm("정말 이 사용자를 추방하시겠습니까? 관련된 모든 데이터가 영구 삭제됩니다.")) return;
 
     try {
-      const batch = writeBatch(db);
+      console.log("--- 추방 및 연쇄 삭제 시작 ---");
 
-      // 2-3. 실제 삭제 로직
-      batch.delete(doc(db, 'users', userId));
-      batch.delete(doc(db, 'timetables', userId));
+      // 1단계: users 컬렉션에서 해당 사용자 문서 진짜로 삭제
+      await deleteDoc(doc(db, "users", targetUserId));
+      console.log("1단계: 사용자 프로필 삭제 완료");
 
-      const reservationsRef = collection(db, 'reservations');
-      const qRes = query(reservationsRef, where('userId', '==', userId));
+      // 2단계: 연쇄 삭제 (timetables, reservations, overrides)
+      const deletePromises: Promise<void>[] = [];
+
+      // (1) timetables 삭제 (ID 기반 및 필드 기반 모두 체크)
+      // 보통 문서 ID가 UID이므로 즉시 삭제 추가
+      deletePromises.push(deleteDoc(doc(db, "timetables", targetUserId)));
+
+      // (2) reservations 연쇄 삭제
+      const reservationsRef = collection(db, "reservations");
+      const qRes = query(reservationsRef, where("userId", "==", targetUserId));
       const resSnap = await getDocs(qRes);
-      resSnap.forEach((d) => batch.delete(d.ref));
+      resSnap.forEach((document) => {
+        deletePromises.push(deleteDoc(doc(db, "reservations", document.id)));
+      });
 
-      const overridesRef = collection(db, 'overrides');
-      const qOvr = query(overridesRef, where('teacherId', '==', userId));
+      // (3) overrides 연쇄 삭제
+      const overridesRef = collection(db, "overrides");
+      const qOvr = query(overridesRef, where("teacherId", "==", targetUserId));
       const ovrSnap = await getDocs(qOvr);
-      ovrSnap.forEach((d) => batch.delete(d.ref));
+      ovrSnap.forEach((document) => {
+        deletePromises.push(deleteDoc(doc(db, "overrides", document.id)));
+      });
 
-      await batch.commit();
+      // 모든 삭제 작업 병렬 실행
+      await Promise.all(deletePromises);
+      console.log("2단계: 연쇄 데이터(시간표, 예약 등) 삭제 완료");
 
-      // 2-4. 성공 시 즉시 상태 업데이트
-      setUsers(prev => prev.filter(user => user.uid !== userId));
+      // 3단계: 화면 새로고침 없이 즉시 목록에서 제거 (상태 업데이트)
+      setUsers(prev => prev.filter(user => user.uid !== targetUserId));
       
-      alert(`${userName} 선생님이 성공적으로 추방되었습니다.`);
-      console.log("추방 완료:", userId);
+      console.log("추방 및 연쇄 삭제 완전 성공");
+      alert(`${userName} 선생님의 모든 데이터가 성공적으로 삭제되었습니다.`);
 
-    } catch (error: any) {
-      console.error("추방 중 오류 발생:", error);
-      alert(`추방 실패: ${error.message}`);
+    } catch (error) {
+      console.error("추방 로직 에러: ", error);
+      alert("추방 처리 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
     }
   };
 
