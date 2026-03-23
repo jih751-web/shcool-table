@@ -43,60 +43,46 @@ const AdminUserPage: React.FC = () => {
   };
 
   const kickUser = async (uid: string, userName: string) => {
-    console.log("Kick button clicked for user:", userName, uid);
-
-    if (uid === userData?.uid) {
-      alert("자기 자신을 추방할 수 없습니다.");
-      return;
-    }
-
-    // 1. 확인 팝업창 띄우기 (요청 문구로 수정)
-    const proceed = window.confirm("정말 이 사용자를 추방하시겠습니까? 등록된 시간표와 예약 정보 등 모든 데이터가 영구적으로 삭제됩니다.");
-    if (!proceed) return;
+    // 1. 확인 창(Confirm) 추가
+    if (!window.confirm("정말 이 사용자를 추방하시겠습니까? 관련 데이터가 모두 삭제됩니다.")) return;
 
     try {
+      console.log("실제 삭제 시작:", userName, uid);
+      
       const batch = writeBatch(db);
 
-      // 2. 연쇄 삭제 로직 (Batch 사용)
-      
-      // (1) users 컬렉션에서 해당 사용자의 문서 삭제
+      // 2. 실제 삭제 로직 (users 및 주요 컬렉션 삭제)
+      // users 컬렉션에서 해당 사용자의 문서 삭제
       batch.delete(doc(db, 'users', uid));
 
-      // (2) timetables 컬렉션에서 해당 사용자의 시간표 삭제 (문서 ID가 uid인 경우)
-      // 존재 여부 확인 후 삭제 (batch.delete는 문서가 없어도 에러를 내지 않지만, 명시적 관리를 위해)
+      // timetables 컬렉션에서 해당 사용자의 시간표 삭제
       batch.delete(doc(db, 'timetables', uid));
 
-      // (3) reservations 컬렉션에서 해당 사용자가 등록한 데이터 삭제
-      // reservations는 문서 ID가 uid가 아닐 수 있으므로 쿼리하여 삭제
+      // 3. 연쇄 삭제 (reservations, overrides 등)
+      // reservations 삭제
       const reservationsRef = collection(db, 'reservations');
       const qRes = query(reservationsRef, where('userId', '==', uid));
-      const queryResSnapshot = await getDocs(qRes);
-      
-      queryResSnapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
+      const resSnap = await getDocs(qRes);
+      resSnap.forEach((d) => batch.delete(d.ref));
 
-      // (4) 기타 관련 데이터 (예: overrides) 연쇄 삭제
+      // overrides 삭제
       const overridesRef = collection(db, 'overrides');
       const qOvr = query(overridesRef, where('teacherId', '==', uid));
-      const queryOvrSnapshot = await getDocs(qOvr);
-      
-      queryOvrSnapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
+      const ovrSnap = await getDocs(qOvr);
+      ovrSnap.forEach((d) => batch.delete(d.ref));
 
-      // 3. 일괄 실행 (Batch Commit)
+      // 일괄 실행
       await batch.commit();
+
+      // 4. 프론트엔드 상태 업데이트 (즉시 화면에서 제거)
+      setUsers(prev => prev.filter(user => user.uid !== uid));
       
-      console.log(`Successfully kicked user ${userName} and cleaned up all data.`);
-      alert(`${userName} 선생님이 추방되었습니다. 관련 데이터가 모두 삭제되었습니다.`);
-      
-      // 4. 화면 즉시 갱신 (onSnapshot으로도 갱신되지만, 즉시성을 위해 State 필터링 추가)
-      setUsers(prev => prev.filter(u => u.uid !== uid));
-      
-    } catch (error) {
-      console.error("Error during cascading delete:", error);
-      alert("데이터 삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      alert(`${userName} 선생님이 성공적으로 추방되었습니다.`);
+      console.log("추방 완료:", uid);
+
+    } catch (error: any) {
+      console.error("추방 중 오류 발생:", error);
+      alert(`추방 실패: ${error.message}`);
     }
   };
 
