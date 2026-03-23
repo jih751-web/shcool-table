@@ -26,12 +26,20 @@ const HealingQuoteWidget = () => {
   if (!isMounted || !quote) return null;
 
   return (
-    <div className="hidden lg:flex items-center gap-6 py-5 px-10 bg-white/90 backdrop-blur-md rounded-[2rem] border-2 border-indigo-100 shadow-lg animate-in fade-in slide-in-from-right-4 duration-700 flex-1 ml-6 hover:shadow-xl transition-all group overflow-hidden relative">
-      <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-50/50 rounded-full blur-2xl group-hover:bg-indigo-100/50 transition-colors"></div>
-      <div className="flex items-center justify-center w-10 h-10 bg-indigo-50 rounded-2xl text-xl shadow-inner group-hover:scale-110 transition-transform shrink-0 border border-indigo-100/50">
+    <div className="flex items-center gap-4 md:gap-6 py-4 md:py-6 px-6 md:px-10 bg-white/95 backdrop-blur-md rounded-[2.5rem] border-2 border-indigo-100/50 shadow-xl animate-in fade-in slide-in-from-right-4 duration-700 w-full lg:flex-1 lg:ml-6 hover:shadow-2xl transition-all group overflow-hidden relative min-h-[5rem]">
+      <div className="absolute -right-4 -top-4 w-32 h-32 bg-indigo-50/50 rounded-full blur-3xl group-hover:bg-indigo-100/50 transition-colors"></div>
+      <div className="flex items-center justify-center w-12 h-12 bg-indigo-50 rounded-2xl text-2xl shadow-inner group-hover:scale-110 transition-transform shrink-0 border border-indigo-100/50 relative z-10">
         🍀
       </div>
-      <p className="text-lg md:text-xl font-bold text-indigo-900 leading-relaxed whitespace-normal break-keep relative z-10" style={{ fontFamily: "'Nanum Myeongjo', serif" }}>
+      <p 
+        className="text-indigo-900 whitespace-normal break-keep relative z-10 w-full" 
+        style={{ 
+          fontFamily: "'Jua', sans-serif",
+          fontSize: 'clamp(1.1rem, 3.5vw, 1.6rem)', // 약 0.7배 축소 (시원하면서도 부담 없는 크기)
+          lineHeight: '1.4',
+          textShadow: '1px 1px 2px rgba(255, 255, 255, 0.8), 0px 0px 8px rgba(79, 70, 229, 0.1)'
+        }}
+      >
         {quote}
       </p>
     </div>
@@ -483,12 +491,17 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-[1200px] mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <a 
+            href="https://school.gyo6.net/ulms" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
             <div className="bg-brand-600 p-2 rounded-xl text-white shadow-md">
               <CalendarDays className="w-5 h-5" />
             </div>
             <h1 className="text-xl font-black text-slate-800 tracking-tight">울릉중학교</h1>
-          </div>
+          </a>
           <div className="hidden lg:flex items-center gap-2">
             <Link to="/global" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
               <CalendarRange className="w-4 h-4" /> 시간표 현황
@@ -658,7 +671,7 @@ export default function DashboardPage() {
               {/* Shortcut Badges Group (2x2 Grid) */}
               <div className="grid grid-cols-2 gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-left-4 duration-500">
                 <a 
-                  href="https://getis.gyo6.net/" 
+                  href="https://gbe.eduptl.kr" 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-800 text-white text-[10px] font-black hover:bg-slate-700 transition-colors shadow-sm whitespace-nowrap" 
@@ -676,7 +689,7 @@ export default function DashboardPage() {
                   경북
                 </a>
                 <a 
-                  href="https://school.gyo6.net/ulleungm" 
+                  href="https://school.gyo6.net/ulms" 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="flex items-center justify-center px-2 py-0.5 rounded-lg bg-orange-500 text-white text-[10px] font-black hover:bg-orange-400 transition-colors shadow-sm whitespace-nowrap" 

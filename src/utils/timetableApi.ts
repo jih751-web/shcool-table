@@ -220,24 +220,41 @@ export const executeRollbackTransaction = async (recordId: string) => {
   const recordRef = doc(db, 'replacements', recordId);
 
   return await runTransaction(db, async (transaction) => {
+    // --- 1단계: 모든 데이터 읽기 (READS FIRST) ---
+    
+    // 1. 교체 기록 읽기
     const recordSnap = await transaction.get(recordRef);
     if (!recordSnap.exists()) throw new Error("해당 교체/보강 기록이 존재하지 않습니다.");
-
     const record = recordSnap.data() as any;
-    const { type, requestorId, targetId, sourceDate, sourcePeriod, targetDate, targetPeriod } = record;
+    const { type, requestorId, targetId, sourceDate, targetDate, sourcePeriod, targetPeriod } = record;
 
+    // 2. 기초 시간표 읽기
     const reqBaseRef = doc(db, 'timetables', requestorId);
     const tarBaseRef = doc(db, 'timetables', targetId);
-    
-    const reqSourceOvRef = doc(db, 'overrides', `${requestorId}_${sourceDate}`);
-    const tarSourceOvRef = doc(db, 'overrides', `${targetId}_${sourceDate}`);
-
-    const reqBaseSnap = await transaction.get(reqBaseRef);
-    const tarBaseSnap = await transaction.get(tarBaseRef);
-    if (!reqBaseSnap.exists() || !tarBaseSnap.exists()) throw new Error("교사 기초 시간표를 찾을 수 없습니다.");
-
+    const [reqBaseSnap, tarBaseSnap] = await Promise.all([
+      transaction.get(reqBaseRef),
+      transaction.get(tarBaseRef)
+    ]);
+    if (!reqBaseSnap.exists() || !tarBaseSnap.exists()) {
+      throw new Error("교사 기초 시간표를 찾을 수 없습니다.");
+    }
     const reqBaseData = reqBaseSnap.data() as Timetable;
     const tarBaseData = tarBaseSnap.data() as Timetable;
+
+    // 3. 오버라이드 데이터 읽기 (Source 및 Target 모두 미리 읽기)
+    const reqSourceOvRef = doc(db, 'overrides', `${requestorId}_${sourceDate}`);
+    const tarSourceOvRef = doc(db, 'overrides', `${targetId}_${sourceDate}`);
+    const reqTargetOvRef = targetDate ? doc(db, 'overrides', `${requestorId}_${targetDate}`) : null;
+    const tarTargetOvRef = targetDate ? doc(db, 'overrides', `${targetId}_${targetDate}`) : null;
+
+    const [reqSourceOvSnap, tarSourceOvSnap, reqTargetOvSnap, tarTargetOvSnap] = await Promise.all([
+      transaction.get(reqSourceOvRef),
+      transaction.get(tarSourceOvRef),
+      reqTargetOvRef ? transaction.get(reqTargetOvRef) : Promise.resolve(null),
+      tarTargetOvRef ? transaction.get(tarTargetOvRef) : Promise.resolve(null)
+    ]);
+
+    // --- 2단계: 로직 계산 (LOGIC ONLY) ---
 
     const createEmptySlots = (): ClassSlot[] => [1,2,3,4,5,6,7].map(p => ({ period: p, subject: '', gradeClass: '' }));
     const getBaseSlots = (base: Timetable, date: string): ClassSlot[] => {
@@ -260,20 +277,19 @@ export const executeRollbackTransaction = async (recordId: string) => {
       return JSON.stringify(current) === JSON.stringify(base);
     };
 
-    // 1. Source Date Rollback
-    const reqSourceOvSnap = await transaction.get(reqSourceOvRef);
-    const tarSourceOvSnap = await transaction.get(tarSourceOvRef);
-    const reqSourceBase = getBaseSlots(reqBaseData, sourceDate);
-    const tarSourceBase = getBaseSlots(tarBaseData, sourceDate);
+    // --- 3단계: 모든 변경사항 기록 (WRITES LAST) ---
 
-    if (reqSourceOvSnap.exists()) {
+    // 1. Source Date Rollback
+    const reqSourceBase = getBaseSlots(reqBaseData, sourceDate);
+    if (reqSourceOvSnap?.exists()) {
       const slots = (reqSourceOvSnap.data() as Override).slots;
       rollbackSlots(slots, reqSourceBase, sourcePeriod);
       if (isSlotsMatchingBase(slots, reqSourceBase)) transaction.delete(reqSourceOvRef);
       else transaction.update(reqSourceOvRef, { slots });
     }
 
-    if (tarSourceOvSnap.exists()) {
+    const tarSourceBase = getBaseSlots(tarBaseData, sourceDate);
+    if (tarSourceOvSnap?.exists()) {
       const slots = (tarSourceOvSnap.data() as Override).slots;
       rollbackSlots(slots, tarSourceBase, sourcePeriod);
       if (isSlotsMatchingBase(slots, tarSourceBase)) transaction.delete(tarSourceOvRef);
@@ -282,21 +298,16 @@ export const executeRollbackTransaction = async (recordId: string) => {
 
     // 2. Target Date Rollback (Only for SWAP)
     if (type === 'SWAP' && targetDate && targetPeriod) {
-      const reqTargetOvRef = doc(db, 'overrides', `${requestorId}_${targetDate}`);
-      const tarTargetOvRef = doc(db, 'overrides', `${targetId}_${targetDate}`);
-      const reqTargetOvSnap = await transaction.get(reqTargetOvRef);
-      const tarTargetOvSnap = await transaction.get(tarTargetOvRef);
       const reqTargetBase = getBaseSlots(reqBaseData, targetDate);
-      const tarTargetBase = getBaseSlots(tarBaseData, targetDate);
-
-      if (reqTargetOvSnap.exists()) {
+      if (reqTargetOvSnap?.exists() && reqTargetOvRef) {
         const slots = (reqTargetOvSnap.data() as Override).slots;
         rollbackSlots(slots, reqTargetBase, targetPeriod);
         if (isSlotsMatchingBase(slots, reqTargetBase)) transaction.delete(reqTargetOvRef);
         else transaction.update(reqTargetOvRef, { slots });
       }
 
-      if (tarTargetOvSnap.exists()) {
+      const tarTargetBase = getBaseSlots(tarBaseData, targetDate);
+      if (tarTargetOvSnap?.exists() && tarTargetOvRef) {
         const slots = (tarTargetOvSnap.data() as Override).slots;
         rollbackSlots(slots, tarTargetBase, targetPeriod);
         if (isSlotsMatchingBase(slots, tarTargetBase)) transaction.delete(tarTargetOvRef);

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import type { Teacher } from '../types';
-import { Shield, UserMinus, UserCheck, Search, Users } from 'lucide-react';
+import { Shield, UserMinus, UserCheck, Search, Users, Trash2 } from 'lucide-react';
 
 const AdminUserPage: React.FC = () => {
   const { userData } = useAuth();
@@ -39,6 +39,42 @@ const AdminUserPage: React.FC = () => {
     } catch (error) {
       console.error("Error updating user status:", error);
       alert("상태 변경에 실패했습니다.");
+    }
+  };
+
+  const kickUser = async (uid: string, userName: string) => {
+    if (uid === userData?.uid) {
+      alert("자기 자신을 추방할 수 없습니다.");
+      return;
+    }
+
+    if (!confirm(`정말 [${userName}] 사용자를 추방(삭제)하시겠습니까?\n이 작업은 되돌릴 수 없으며 모든 사용자 데이터가 삭제됩니다.`)) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // 1. 사용자 문서 삭제
+      batch.delete(doc(db, 'users', uid));
+
+      // 2. 기초 시간표 문서 삭제 (있는 경우)
+      batch.delete(doc(db, 'timetables', uid));
+
+      // 3. 오버라이드 데이터 삭제 (해당 사용자 ID로 된 모든 데이터)
+      const overridesRef = collection(db, 'overrides');
+      const q = query(overridesRef, where('teacherId', '==', uid));
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      // 4. 일괄 실행 (Batch Commit)
+      await batch.commit();
+      
+      // onSnapshot이 자동으로 상태를 업데이트하므로 별도의 setUsers는 필요 없음
+    } catch (error) {
+      console.error("Error deleting user and related data:", error);
+      alert("사용자 및 관련 데이터 삭제에 실패했습니다.");
     }
   };
 
@@ -143,22 +179,33 @@ const AdminUserPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <button
-                          onClick={() => toggleBlock(user.uid, !!user.isBlocked)}
-                          disabled={user.uid === userData?.uid}
-                          className={`p-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
-                            user.isBlocked
-                              ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-200'
-                              : 'bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200'
-                          }`}
-                          title={user.isBlocked ? '차단 해제' : '차단하기'}
-                        >
-                          {user.isBlocked ? (
-                            <UserCheck className="w-5 h-5" />
-                          ) : (
-                            <UserMinus className="w-5 h-5" />
-                          )}
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => toggleBlock(user.uid, !!user.isBlocked)}
+                            disabled={user.uid === userData?.uid}
+                            className={`p-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
+                              user.isBlocked
+                                ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-200'
+                                : 'bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200'
+                            }`}
+                            title={user.isBlocked ? '차단 해제' : '차단하기'}
+                          >
+                            {user.isBlocked ? (
+                              <UserCheck className="w-5 h-5" />
+                            ) : (
+                              <UserMinus className="w-5 h-5" />
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={() => kickUser(user.uid, user.name)}
+                            disabled={user.uid === userData?.uid}
+                            className="p-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 shadow-sm shadow-rose-200 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="추방(삭제)하기"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
