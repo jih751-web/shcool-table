@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, doc, updateDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom';
 import type { Teacher } from '../types';
-import { Shield, UserMinus, UserCheck, Search, Users, Trash2 } from 'lucide-react';
+import { Shield, UserMinus, UserCheck, Search, Users, Trash2, ArrowLeft } from 'lucide-react';
 
 const AdminUserPage: React.FC = () => {
   const { userData } = useAuth();
@@ -42,43 +43,42 @@ const AdminUserPage: React.FC = () => {
     }
   };
 
-  const kickUser = async (uid: string, userName: string) => {
-    // 1. 확인 창(Confirm) 추가
-    if (!window.confirm("정말 이 사용자를 추방하시겠습니까? 관련 데이터가 모두 삭제됩니다.")) return;
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    // 2-1. 함수 시작 시 로그 확인 (요청 사항)
+    console.log("추방 버튼 클릭됨: ", userId);
+
+    if (userId === userData?.uid) {
+      alert("자기 자신을 추방할 수 없습니다.");
+      return;
+    }
+
+    // 2-2. 확인 창(Confirm) 추가 (요청 문구)
+    if (!window.confirm("정말 이 사용자를 추방하시겠습니까? 관련 데이터까지 영구적으로 삭제됩니다.")) return;
 
     try {
-      console.log("실제 삭제 시작:", userName, uid);
-      
       const batch = writeBatch(db);
 
-      // 2. 실제 삭제 로직 (users 및 주요 컬렉션 삭제)
-      // users 컬렉션에서 해당 사용자의 문서 삭제
-      batch.delete(doc(db, 'users', uid));
+      // 2-3. 실제 삭제 로직
+      batch.delete(doc(db, 'users', userId));
+      batch.delete(doc(db, 'timetables', userId));
 
-      // timetables 컬렉션에서 해당 사용자의 시간표 삭제
-      batch.delete(doc(db, 'timetables', uid));
-
-      // 3. 연쇄 삭제 (reservations, overrides 등)
-      // reservations 삭제
       const reservationsRef = collection(db, 'reservations');
-      const qRes = query(reservationsRef, where('userId', '==', uid));
+      const qRes = query(reservationsRef, where('userId', '==', userId));
       const resSnap = await getDocs(qRes);
       resSnap.forEach((d) => batch.delete(d.ref));
 
-      // overrides 삭제
       const overridesRef = collection(db, 'overrides');
-      const qOvr = query(overridesRef, where('teacherId', '==', uid));
+      const qOvr = query(overridesRef, where('teacherId', '==', userId));
       const ovrSnap = await getDocs(qOvr);
       ovrSnap.forEach((d) => batch.delete(d.ref));
 
-      // 일괄 실행
       await batch.commit();
 
-      // 4. 프론트엔드 상태 업데이트 (즉시 화면에서 제거)
-      setUsers(prev => prev.filter(user => user.uid !== uid));
+      // 2-4. 성공 시 즉시 상태 업데이트
+      setUsers(prev => prev.filter(user => user.uid !== userId));
       
       alert(`${userName} 선생님이 성공적으로 추방되었습니다.`);
-      console.log("추방 완료:", uid);
+      console.log("추방 완료:", userId);
 
     } catch (error: any) {
       console.error("추방 중 오류 발생:", error);
@@ -106,6 +106,16 @@ const AdminUserPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+          <Link 
+            to="/" 
+            className="inline-flex items-center gap-2 text-slate-500 hover:text-brand-600 font-bold transition-colors group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            메인 화면으로 돌아가기
+          </Link>
+        </div>
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
@@ -206,7 +216,7 @@ const AdminUserPage: React.FC = () => {
                           </button>
                           
                           <button
-                            onClick={() => kickUser(user.uid, user.name)}
+                            onClick={() => handleDeleteUser(user.uid, user.name)}
                             disabled={user.uid === userData?.uid}
                             className="p-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 shadow-sm shadow-rose-200 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                             title="추방(삭제)하기"
