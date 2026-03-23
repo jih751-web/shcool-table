@@ -69,10 +69,10 @@ const QuickButtons = () => {
         <Sun className="w-5 h-5 group-hover:rotate-12 transition-transform" />
       </a>
       <a
-        href="https://www.ulleung.go.kr/ko/page.do?mnu_uid=2058"
+        href="https://band.us/@kstpohang"
         target="_blank"
         rel="noopener noreferrer"
-        title="울릉 알리미"
+        title="여객선 운항 정보 (KST포항)"
         className="flex items-center justify-center w-10 h-10 bg-white rounded-full border border-slate-100 text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group"
       >
         <Bell className="w-5 h-5 group-hover:animate-pulse transition-all" />
