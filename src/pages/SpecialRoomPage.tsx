@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import type { SpecialRoom, RoomBooking } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
+import Header from '../components/Header';
 import { ArrowLeft, MonitorPlay, ChevronLeft, ChevronRight, Check, Loader2, Settings, X } from 'lucide-react';
 import { startOfWeek, addWeeks, subWeeks, format, addDays } from 'date-fns';
 import RoomManagementModal from '../components/RoomManagementModal';
@@ -245,21 +246,25 @@ const SpecialRoomPage: React.FC = () => {
       </div>
     );
   }
-
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <Header />
+      
+      <main className="max-w-6xl mx-auto w-full py-8 px-4 sm:px-6 lg:px-8 space-y-6">
         
-        {/* Header Area */}
+        {/* Page Title Area */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link to="/dashboard" className="p-2 -ml-2 text-slate-400 hover:bg-slate-200 rounded-full transition-colors">
+            <Link to="/dashboard" className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-brand-600 rounded-2xl shadow-sm transition-all active:scale-95">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <h1 className="text-2xl font-black flex items-center gap-2 text-slate-800 tracking-tight">
-              <MonitorPlay className="w-6 h-6 text-brand-600" />
-              특별실 예약 관리
-            </h1>
+            <div>
+              <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
+                <MonitorPlay className="w-6 h-6 text-brand-600" />
+                특별실 예약 관리
+              </h1>
+              <p className="text-slate-500 font-bold mt-1">공동 사용 공간 실시간 예약 현황</p>
+            </div>
           </div>
           <button 
             onClick={() => setIsManageMode(true)}
@@ -343,7 +348,7 @@ const SpecialRoomPage: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </main>
 
       <RoomManagementModal 
         isOpen={isManageMode}

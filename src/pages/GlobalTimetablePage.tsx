@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, CalendarRange, ChevronLeft, ChevronRight, Settings, Loader2, ArrowLeft } from 'lucide-react';
+import { CalendarRange, ChevronLeft, ChevronRight, Loader2, ArrowLeft, Plus } from 'lucide-react';
+import Header from '../components/Header';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import type { Timetable, ClassSlot } from '../types';
@@ -12,7 +13,7 @@ const DAYS = ['월', '화', '수', '목', '금'];
 const PERIODS = [1, 2, 3, 4, 5, 6, 7];
 
 const GlobalTimetablePage: React.FC = () => {
-  const { user, userProfiles, logout } = useAuth();
+  const { user, userProfiles } = useAuth();
   const [allTimetables, setAllTimetables] = useState<Timetable[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -119,30 +120,50 @@ const GlobalTimetablePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
-      <header className="bg-white shadow-sm border-b border-slate-300 sticky top-0 z-40">
-        <div className="max-w-[1800px] mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/dashboard" className="p-2 -ml-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors" title="메인 대시보드로 돌아가기">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <h1 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-              <CalendarRange className="w-5 h-5 text-blue-600" />
-              전체 시간표
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link to="/mytimetable" className="p-1.5 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded flex items-center gap-1 border border-transparent hover:border-slate-300 transition-all">
-              <Settings className="w-4 h-4" /> 내 시간표
-            </Link>
-            <div className="w-px h-4 bg-slate-300 mx-1"></div>
-            <button onClick={logout} className="ml-1 p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-all">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="flex-1 max-w-[1800px] w-full mx-auto p-2 md:p-4 overflow-hidden flex flex-col">
+        <div className="w-full mb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Link to="/dashboard" className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-brand-600 rounded-2xl shadow-sm transition-all active:scale-95" title="메인 대시보드로 돌아가기">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <CalendarRange className="w-6 h-6 text-brand-600" />
+                전체 시간표 현황
+              </h1>
+              <p className="text-slate-500 font-bold text-xs mt-0.5">교사별 주간 시간표 통합 보기</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              to="/mytimetable"
+              className="px-4 py-2 text-sm font-black text-white bg-brand-600 hover:bg-brand-700 rounded-xl flex items-center gap-1.5 transition-all shadow-md active:scale-95 whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" /> 시간표 추가
+            </Link>
+
+            <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200">
+            <button 
+              onClick={handlePrevWeek}
+              className="p-2 hover:bg-slate-50 text-slate-400 hover:text-brand-600 rounded-xl transition-all"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="px-4 text-sm font-black text-slate-700 whitespace-nowrap">
+              {weekDisplay}
+            </span>
+            <button 
+              onClick={handleNextWeek}
+              className="p-2 hover:bg-slate-50 text-slate-400 hover:text-brand-600 rounded-xl transition-all"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            </div>
+          </div>
+        </div>
         <div className="bg-white border border-slate-300 shadow-sm flex flex-col h-full flex-1">
           {/* Header Controls */}
           <div className="p-2 border-b border-slate-300 flex items-center justify-between bg-slate-50 shrink-0">

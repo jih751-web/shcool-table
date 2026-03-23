@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import type { SchoolEvent } from '../types';
 import { Calendar, Trash2, ArrowLeft, ChevronLeft, ChevronRight, X, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import Header from '../components/Header';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, format, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -101,29 +102,33 @@ const EventsPage: React.FC = () => {
   }).sort((a, b) => a.periodStart - b.periodStart);
   
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
-
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <Header />
+
+      <main className="max-w-6xl mx-auto w-full py-8 px-4 sm:px-6 lg:px-8 space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link to="/dashboard" className="p-2 -ml-2 text-slate-400 hover:bg-slate-200 rounded-full transition-colors">
+            <Link to="/dashboard" className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-brand-600 rounded-2xl shadow-sm transition-all active:scale-95">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
-              <Calendar className="text-brand-600" />
-              월간 학사 일정
-            </h1>
+            <div>
+              <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
+                <Calendar className="w-6 h-6 text-brand-600" />
+                월간 학사 일정
+              </h1>
+              <p className="text-slate-500 font-bold mt-1">학교 공식 일정 및 행사 관리</p>
+            </div>
           </div>
           
-          <div className="flex items-center gap-4 bg-white px-4 py-1.5 rounded-xl border border-slate-200 shadow-sm">
-            <button onClick={() => setCurrentMonth(prev => subMonths(prev, 1))} className="p-1.5 hover:bg-slate-100 rounded-md text-slate-500 transition-colors">
+          <div className="flex items-center gap-4 bg-white px-4 py-1.5 rounded-2xl border border-slate-200 shadow-sm">
+            <button onClick={() => setCurrentMonth(prev => subMonths(prev, 1))} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-all active:scale-95">
               <ChevronLeft className="w-5 h-5"/>
             </button>
-            <h2 className="text-lg font-bold w-24 text-center tracking-tight text-slate-800">
+            <h2 className="text-lg font-black w-24 text-center tracking-tight text-slate-800">
               {format(currentMonth, 'yyyy. MM')}
             </h2>
-            <button onClick={() => setCurrentMonth(prev => addMonths(prev, 1))} className="p-1.5 hover:bg-slate-100 rounded-md text-slate-500 transition-colors">
+            <button onClick={() => setCurrentMonth(prev => addMonths(prev, 1))} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-all active:scale-95">
               <ChevronRight className="w-5 h-5"/>
             </button>
           </div>
@@ -189,7 +194,7 @@ const EventsPage: React.FC = () => {
             })}
           </div>
         </div>
-      </div>
+      </main>
 
       {selectedDate && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">

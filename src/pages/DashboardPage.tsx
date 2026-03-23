@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, CalendarDays, Settings, CalendarRange, Clock, BookOpen, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, Database, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, Cloud, Ticket, Sun, Bell, Menu, Users, Download, Share } from 'lucide-react';
+import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot, collection, getDocs, writeBatch, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo } from '../types';
 
-import { Link } from 'react-router-dom';
 import SmartReplacementModal from '../components/SmartReplacementModal';
 import { addDays, subDays, format, isToday } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import NicknameModal from '../components/NicknameModal';
 import { healingQuotes } from '../data/healingQuotes';
+
+import Header from '../components/Header';
+import QuickButtons from '../components/QuickButtons';
 
 // --- Healing Quote Widget (Wide Banner Style) ---
 const HealingQuoteWidget = () => {
@@ -26,65 +28,38 @@ const HealingQuoteWidget = () => {
   if (!isMounted || !quote) return null;
 
   return (
-    <div className="flex items-center gap-4 md:gap-6 py-4 md:py-6 px-6 md:px-10 bg-white/95 backdrop-blur-md rounded-[2.5rem] border-2 border-indigo-100/50 shadow-xl animate-in fade-in slide-in-from-right-4 duration-700 w-full lg:flex-1 lg:ml-6 hover:shadow-2xl transition-all group overflow-hidden relative min-h-[5rem]">
+    <div className="flex flex-col lg:flex-row items-center justify-between gap-4 md:gap-6 py-4 md:py-6 px-6 md:px-10 bg-white/95 backdrop-blur-md rounded-[2.5rem] border-2 border-indigo-100/50 shadow-xl animate-in fade-in slide-in-from-right-4 duration-700 w-full lg:flex-1 lg:ml-6 hover:shadow-2xl transition-all group overflow-hidden relative min-h-[5rem]">
       <div className="absolute -right-4 -top-4 w-32 h-32 bg-indigo-50/50 rounded-full blur-3xl group-hover:bg-indigo-100/50 transition-colors"></div>
-      <div className="flex items-center justify-center w-12 h-12 bg-indigo-50 rounded-2xl text-2xl shadow-inner group-hover:scale-110 transition-transform shrink-0 border border-indigo-100/50 relative z-10">
-        🍀
+      
+      <div className="flex items-center gap-4 md:gap-6 flex-1 min-w-0">
+        <div className="flex items-center justify-center w-12 h-12 bg-indigo-50 rounded-2xl text-2xl shadow-inner group-hover:scale-110 transition-transform shrink-0 border border-indigo-100/50 relative z-10">
+          🍀
+        </div>
+        <p 
+          className="text-indigo-900 whitespace-normal break-keep relative z-10 flex-1 min-w-0" 
+          style={{ 
+            fontFamily: "'Jua', sans-serif",
+            fontSize: 'clamp(1.1rem, 3.5vw, 1.6rem)',
+            lineHeight: '1.4',
+            textShadow: '1px 1px 2px rgba(255, 255, 255, 0.8), 0px 0px 8px rgba(79, 70, 229, 0.1)'
+          }}
+        >
+          {quote}
+        </p>
       </div>
-      <p 
-        className="text-indigo-900 whitespace-normal break-keep relative z-10 w-full" 
-        style={{ 
-          fontFamily: "'Jua', sans-serif",
-          fontSize: 'clamp(1.1rem, 3.5vw, 1.6rem)', // 약 0.7배 축소 (시원하면서도 부담 없는 크기)
-          lineHeight: '1.4',
-          textShadow: '1px 1px 2px rgba(255, 255, 255, 0.8), 0px 0px 8px rgba(79, 70, 229, 0.1)'
-        }}
-      >
-        {quote}
-      </p>
+
+      <div className="relative z-10 shrink-0">
+        <QuickButtons />
+      </div>
     </div>
   );
 };
 
-// --- Quick Buttons Component ---
-const QuickButtons = () => {
-  return (
-    <div className="flex items-center gap-3 ml-auto animate-in fade-in slide-in-from-right-4 duration-1000">
-      <a
-        href="https://island.theksa.co.kr/"
-        target="_blank"
-        rel="noopener noreferrer"
-        title="여객선 예매"
-        className="flex items-center justify-center w-10 h-10 bg-white rounded-full border border-indigo-100 text-indigo-600 shadow-sm hover:bg-indigo-50 hover:shadow-md transition-all group"
-      >
-        <Ticket className="w-5 h-5 group-hover:scale-110 transition-transform" />
-      </a>
-      <a
-        href="https://www.windy.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        title="실시간 날씨"
-        className="flex items-center justify-center w-10 h-10 bg-white rounded-full border border-orange-100 text-orange-500 shadow-sm hover:bg-orange-50 hover:shadow-md transition-all group"
-      >
-        <Sun className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-      </a>
-      <a
-        href="https://band.us/@kstpohang"
-        target="_blank"
-        rel="noopener noreferrer"
-        title="여객선 운항 정보 (KST포항)"
-        className="flex items-center justify-center w-10 h-10 bg-white rounded-full border border-slate-100 text-slate-700 shadow-sm hover:bg-slate-50 hover:shadow-md transition-all group"
-      >
-        <Bell className="w-5 h-5 group-hover:animate-pulse transition-all" />
-      </a>
-    </div>
-  );
-};
 
 
 
 export default function DashboardPage() {
-  const { user, userData, logout } = useAuth();
+  const { user, userData } = useAuth();
   const [baseTimetable, setBaseTimetable] = useState<Timetable | null>(null);
   const [overrideData, setOverrideData] = useState<Override | null>(null);
   const [dailyEvents, setDailyEvents] = useState<SchoolEvent[]>([]);
@@ -108,7 +83,6 @@ export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isChoiceOpen, setIsChoiceOpen] = useState(false);
   const [initialMode, setInitialMode] = useState<'SWAP' | 'MAKEUP'>('SWAP');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{dayOfWeek: string, period: number, subject: string, gradeClass: string, date: string} | null>(null);
 
@@ -118,9 +92,7 @@ export default function DashboardPage() {
   const [isMounted, setIsMounted] = useState(false);
   
   // PWA Install Prompt State (초안전 모드 관리)
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showIOSModal, setShowIOSModal] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -128,17 +100,6 @@ export default function DashboardPage() {
     // 1. PWA 설치 및 환경 체크 (Ultra-Safe Wrapper)
     try {
       if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
-        // 기기 감지 로직 격리
-        const ua = navigator.userAgent.toLowerCase();
-        setIsIOS(/iphone|ipad|ipod/.test(ua));
-
-        const handleBeforeInstallPrompt = (e: any) => {
-          e.preventDefault();
-          setDeferredPrompt(e);
-        };
-
-        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
         // 2. 카카오톡 탈출 후 초기화 (강제 1회 새로고침)
         const params = new URLSearchParams(window.location.search);
         const isFromKakao = params.get('from_kakaotalk') === 'true';
@@ -157,7 +118,6 @@ export default function DashboardPage() {
         }
 
         return () => {
-          window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         };
       }
     } catch (err) {
@@ -165,27 +125,7 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
 
-  // 드롭다운 외부 클릭 감지 (모바일 대응)
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
-        setIsSettingsOpen(false);
-      }
-    };
-    
-    if (isSettingsOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('touchstart', handleClickOutside);
-    }
-    
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, [isSettingsOpen]);
 
   // [성능 최적화] PDF Base64 캐싱 (메모리 내)
 
@@ -425,238 +365,13 @@ export default function DashboardPage() {
     setIsModalOpen(true);
   };
 
-  const clearSampleData = async () => {
-    if (!user) return;
-    if (!window.confirm("정말로 본인을 제외한 모든 교사/시간표 데이터를 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다)")) return;
-    
-    setLoading(true);
-    try {
-      const batch = writeBatch(db);
-      
-      // 1. 모든 시간표 가져오기
-      const ttSnap = await getDocs(collection(db, 'timetables'));
-      ttSnap.forEach(d => {
-        if (d.id !== user.uid) {
-          batch.delete(d.ref);
-        }
-      });
-      
-      // 2. 모든 오버라이드 가져오기
-      const ovSnap = await getDocs(collection(db, 'overrides'));
-      ovSnap.forEach(d => {
-        // 본인의 오버라이드는 유지할지 여부? 일단 샘플 지우는 거니 타인 것만 삭제
-        if (!d.id.startsWith(user.uid)) {
-          batch.delete(d.ref);
-        }
-      });
-      
-      await batch.commit();
-      alert('본인 데이터를 제외한 모든 샘플 시간표가 삭제되었습니다.');
-    } catch (e: any) {
-      alert(`삭제 실패: ${e.message}`);
-    } finally {
-      setLoading(false);
-      setIsSettingsOpen(false);
-    }
-  };
-
-
-  // PWA 설치 핸들러 (Safety First)
-  const handleInstallApp = async () => {
-    try {
-      if (typeof window === 'undefined') return;
-
-      if (isIOS) {
-        setShowIOSModal(true);
-      } else if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to install prompt: ${outcome}`);
-        setDeferredPrompt(null);
-      } else {
-        alert('이미 설치되어 있거나 브라우저에서 설치를 지원하지 않습니다.');
-      }
-    } catch (err) {
-      console.error('Install handler failed safely:', err);
-      try {
-        alert('설치 과정에서 오류가 발생했습니다. 브라우저 설정에서 직접 설치해 주세요.');
-      } catch (e) {}
-    }
-  };
 
   // Safety Wrapper: 브라우저 환경이 준비되기 전에는 아무것도 렌더링하지 않음
   if (!isMounted) return null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
-        <div className="max-w-[1200px] mx-auto px-4 h-16 flex items-center justify-between">
-          <a 
-            href="https://school.gyo6.net/ulms" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-          >
-            <div className="bg-brand-600 p-2 rounded-xl text-white shadow-md">
-              <CalendarDays className="w-5 h-5" />
-            </div>
-            <h1 className="text-xl font-black text-slate-800 tracking-tight">울릉중학교</h1>
-          </a>
-          <div className="hidden lg:flex items-center gap-2">
-            <Link to="/global" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
-              <CalendarRange className="w-4 h-4" /> 시간표 현황
-            </Link>
-            <Link to="/rooms" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
-              <MonitorPlay className="w-4 h-4" /> 특별실
-            </Link>
-            <Link to="/events" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
-              <Calendar className="w-4 h-4" /> 학사일정
-            </Link>
-            <Link to="/status" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
-              <Clock className="w-4 h-4" /> 교체현황
-            </Link>
-            <a 
-              href="https://drive.google.com/drive/folders/1MasUNhkb4PhagYWGwpQlZzHod5xQa0fw?usp=sharing" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap"
-            >
-              <Cloud className="w-4 h-4" /> 규정 자료실
-            </a>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {isMounted && user?.email === 'jih751@gmail.com' ? (
-              // 1. 최고 관리자(Admin) 전용: 톱니바퀴 드롭다운
-                <div className="relative" ref={settingsRef}>
-                  <button 
-                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                    className={`p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95
-                      ${isSettingsOpen ? 'bg-brand-50 border-brand-200 text-brand-600 ring-4 ring-brand-500/10' : 'bg-white border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200'}
-                    `}
-                    title="관리자 설정"
-                  >
-                    {isMounted ? (
-                      <Settings className={`w-5 h-5 ${isSettingsOpen ? 'rotate-90' : ''} transition-transform duration-300`} />
-                    ) : (
-                      <span className="text-xl">⚙️</span>
-                    )}
-                  </button>
-
-                  {isSettingsOpen && (
-                    <>
-                      <div className="absolute right-0 mt-3 w-56 bg-white rounded-[2rem] shadow-2xl border border-slate-100 py-3 z-50 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="px-5 py-2 border-b border-slate-50 mb-2">
-                          <p className="text-[10px] font-black text-brand-600 uppercase tracking-[0.2em]">Master Admin</p>
-                          <p className="text-xs font-bold text-slate-400 truncate">{user?.email}</p>
-                        </div>
-                        
-                        <Link 
-                          to="/admin/users" 
-                          className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
-                          onClick={() => setIsSettingsOpen(false)}
-                        >
-                          <Users className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 사용자 관리
-                        </Link>
-
-                        <button 
-                          onClick={() => { setIsNicknameModalOpen(true); setIsSettingsOpen(false); }}
-                          className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
-                        >
-                          <UserPlus className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 나의 닉네임 설정
-                        </button>
-
-                        {isMounted && (
-                          <button 
-                            onClick={() => { handleInstallApp(); setIsSettingsOpen(false); }}
-                            className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-brand-600 hover:bg-brand-50 hover:text-brand-700 transition-all group"
-                          >
-                            <Download className="w-4 h-4 text-brand-400 group-hover:text-brand-600 transition-colors" /> 앱 다운로드 (PWA)
-                          </button>
-                        )}
-
-                        <Link 
-                          to="/mytimetable" 
-                          className="flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all group"
-                          onClick={() => setIsSettingsOpen(false)}
-                        >
-                          <BookOpen className="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition-colors" /> 기초 시간표 설정
-                        </Link>
-                        
-                        <button 
-                          onClick={clearSampleData}
-                          className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-all group border-t border-slate-50 mt-2"
-                        >
-                          <Database className="w-4 h-4 opacity-50" /> 샘플 데이터 삭제
-                        </button>
-
-                        <button 
-                          onClick={() => { logout(); setIsSettingsOpen(false); }}
-                          className="w-full flex items-center gap-3 px-5 py-3 text-sm font-black text-slate-400 hover:bg-slate-50 hover:text-slate-900 transition-all group"
-                        >
-                          <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" /> 로그아웃
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-            ) : (
-              // 2. 일반 사용자: 단순 로그아웃 버튼 (톱니바퀴 숨김)
-              <button 
-                onClick={() => logout()}
-                className="p-2.5 rounded-2xl bg-white border border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm active:scale-95 group"
-                title="로그아웃"
-              >
-                <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-              </button>
-            )}
-            <button 
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
-            >
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Menu Overlay */}
-        {isMenuOpen && (
-          <div className="lg:hidden fixed inset-0 top-16 z-50 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white border-b border-slate-200 p-6 flex flex-col gap-4 animate-in slide-in-from-top-4 duration-300 shadow-2xl">
-              <Link to="/global" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100">
-                <CalendarRange className="w-5 h-5" /> 시간표 현황
-              </Link>
-              <Link to="/rooms" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100">
-                <MonitorPlay className="w-5 h-5" /> 특별실
-              </Link>
-              <Link to="/events" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100">
-                <Calendar className="w-5 h-5" /> 학사일정
-              </Link>
-              <Link to="/status" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100">
-                <Clock className="w-5 h-5" /> 교체현황
-              </Link>
-              <a 
-                href="https://drive.google.com/drive/folders/1MasUNhkb4PhagYWGwpQlZzHod5xQa0fw?usp=sharing" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-all border border-slate-100"
-              >
-                <Cloud className="w-5 h-5" /> 규정 자료실
-              </a>
-
-              {isMounted && (
-                <button 
-                  onClick={() => { handleInstallApp(); setIsMenuOpen(false); }}
-                  className="flex items-center gap-3 p-4 bg-brand-600 text-white rounded-2xl font-black shadow-lg shadow-brand-200 transition-all active:scale-95 border-2 border-brand-400"
-                >
-                  <Download className="w-5 h-5" /> 앱 다운로드 (PWA)
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </header>
+      <Header />
 
       <main className="flex-1 max-w-[1400px] w-full mx-auto p-4 md:p-8 shrink-0 flex flex-col items-center">
         
@@ -711,8 +426,6 @@ export default function DashboardPage() {
               {/* Healing Quote Widget (Now in Header Area) */}
               <HealingQuoteWidget />
 
-              {/* Quick Navigation Buttons */}
-              <QuickButtons />
             </div>
             <p className="text-slate-500 font-medium flex items-center gap-2">
               <Clock className="w-4 h-4" /> 일일 시간표 내역을 탐색하고 교체할 수 있습니다.
