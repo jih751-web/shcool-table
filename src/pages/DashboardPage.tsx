@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import type { Timetable, ClassSlot, Override, SchoolEvent, Todo } from '../types';
+import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc, orderBy } from 'firebase/firestore';
+import type { Timetable, ClassSlot, Override, SchoolEvent, Todo, TimetableOverride } from '../types';
 
 import SmartReplacementModal from '../components/SmartReplacementModal';
 import { addDays, subDays, format, isToday } from 'date-fns';
@@ -62,6 +62,7 @@ export default function DashboardPage() {
   const { user, userData } = useAuth();
   const [baseTimetable, setBaseTimetable] = useState<Timetable | null>(null);
   const [overrideData, setOverrideData] = useState<Override | null>(null);
+  const [timetableOverrides, setTimetableOverrides] = useState<TimetableOverride[]>([]);
   const [dailyEvents, setDailyEvents] = useState<SchoolEvent[]>([]);
   const [eventError, setEventError] = useState<string | null>(null); // 에러 상태 추가
 
@@ -161,6 +162,25 @@ export default function DashboardPage() {
       setLoading(false);
     });
     return () => unsubOverride();
+  }, [user, currentDateStr]);
+
+  // 2.5 전역 실시간 변동(TimetableOverride) 구독 (Phase 13)
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'timetable_overrides'),
+      where('date', '==', currentDateStr)
+    );
+    const unsubGlobalOverrides = onSnapshot(q, (snapshot) => {
+      const ovs: TimetableOverride[] = [];
+      snapshot.forEach(docSnap => {
+        ovs.push({ id: docSnap.id, ...docSnap.data() } as TimetableOverride);
+      });
+      setTimetableOverrides(ovs);
+    }, (error) => {
+      console.error("Global overrides error:", error);
+    });
+    return () => unsubGlobalOverrides();
   }, [user, currentDateStr]);
 
   // 3. 오늘의 학사일정 실시간 구독 (신규: 기간 설정 지원)
@@ -334,14 +354,52 @@ export default function DashboardPage() {
   const handleNextDay = () => setCurrentDate(prev => addDays(prev, 1));
   const handleToday = () => setCurrentDate(new Date());
 
-  // Merge Logic: 오버라이드가 있으면 우선, 없으면 기초 시간표 요일 데이터 사용
+  // Merge Logic: 오버라이드(기존/신규) 병합 로직
   const getTodaySchedule = (): ClassSlot[] => {
-    if (overrideData) return overrideData.slots;
+    // 1. 기초 시간표에서 오늘의 요일 데이터 가져오기
+    let currentSlots: ClassSlot[] = [];
     if (baseTimetable) {
-       const baseDay = baseTimetable.schedule.find(d => d.dayOfWeek === dayOfWeekStr);
-       if (baseDay) return baseDay.slots;
+      const baseDay = baseTimetable.schedule.find(d => d.dayOfWeek === dayOfWeekStr);
+      if (baseDay) {
+        currentSlots = JSON.parse(JSON.stringify(baseDay.slots));
+      }
     }
-    return [];
+
+    // 2. 기초적인 변동 데이터(Override)가 있다면 1차 적용 (기존 로직 유지)
+    if (overrideData) {
+      currentSlots = JSON.parse(JSON.stringify(overrideData.slots));
+    }
+
+    // 3. 신규 실시간 변동 내역(timetable_overrides) 병합 (Phase 13)
+    // 이 날짜의 모든 변동 내역 중 나(user.uid)와 관련된 것들을 찾아 덮어씀
+    if (timetableOverrides.length > 0 && user) {
+      timetableOverrides.forEach(ov => {
+        // A. 내가 원래 들어가야 할 수업이 다른 교사로 바뀌었거나 사라진 경우 (공강 처리)
+        if (ov.originalTeacherId === user.uid) {
+          const slot = currentSlots.find(s => s.period === ov.period);
+          if (slot) {
+            slot.subject = '';
+            slot.gradeClass = '';
+          }
+        }
+        // B. 내가 다른 사람의 수업을 대신 들어가거나(MAKEUP), 내 수업이 이 시간으로 옮겨온 경우(SWAP)
+        if (ov.newTeacherId === user.uid) {
+          const slot = currentSlots.find(s => s.period === ov.period);
+          if (slot) {
+            slot.subject = ov.subject;
+            slot.gradeClass = ov.gradeClass;
+            // 렌더링 시 구분을 위해 임시 태그/속성 부여 (타입 정의는 subject에 포함하거나 별도 처리)
+            // 여기서는 subject 뒤에 태그를 붙임
+            const tag = ov.type === 'MAKEUP' ? ' (보강)' : ' (대강)';
+            if (!slot.subject.includes(tag)) {
+               slot.subject += tag;
+            }
+          }
+        }
+      });
+    }
+
+    return currentSlots;
   };
 
   const todaySchedule = getTodaySchedule();
@@ -621,11 +679,23 @@ export default function DashboardPage() {
 
                          {hasClass ? (
                            <div className="flex-1 flex items-center justify-between min-w-0">
-                             <h3 className="text-base font-black text-slate-800 tracking-tight flex items-center gap-1.5 truncate">
+                             <h3 className={`text-base font-black tracking-tight flex items-center gap-1.5 truncate ${slot.subject.includes('(보강)') || slot.subject.includes('(대강)') ? 'text-brand-700' : 'text-slate-800'}`}>
                                 <BookOpen className="w-4 h-4 text-brand-500 shrink-0" />
-                                {slot?.subject}
+                                {slot.subject.includes('(보강)') ? (
+                                  <span className="flex items-center gap-1">
+                                    {slot.subject.replace(' (보강)', '')}
+                                    <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">보강</span>
+                                  </span>
+                                ) : slot.subject.includes('(대강)') ? (
+                                  <span className="flex items-center gap-1">
+                                    {slot.subject.replace(' (대강)', '')}
+                                    <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md">대강</span>
+                                  </span>
+                                ) : (
+                                  slot.subject
+                                )}
                              </h3>
-                             <p className="text-slate-500 font-bold text-xs truncate ml-2">{slot?.gradeClass}</p>
+                             <p className="text-slate-500 font-bold text-xs truncate ml-2">{slot.gradeClass}</p>
                            </div>
                          ) : (
                            <div className="flex-1 flex items-center justify-center">

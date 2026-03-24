@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, runTransaction } from 'firebase/firestore';
+import { collection, doc, getDocs, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Timetable, Override, ClassSlot } from '../types';
 import { format } from 'date-fns';
@@ -112,7 +112,38 @@ export const executeSwapTransaction = async (
       transaction.set(tarSourceOvRef, { teacherId: targetId, teacherName: tarBaseData.teacherName, date: sourceDate, slots: tarSourceSlots });
     }
 
-    // 8. 교체 로그 추가
+    // 8. 실시간 연동용 timetable_overrides 기록
+    // A. 내 원본 수업의 교체 내역 (나 -> 상대방)
+    const reqOvId = `${sourceDate}_${sourcePeriod}_${requesterId}`;
+    const reqOvRef = doc(db, 'timetable_overrides', reqOvId);
+    transaction.set(reqOvRef, {
+      date: sourceDate,
+      period: sourcePeriod,
+      originalTeacherId: requesterId,
+      newTeacherId: targetId,
+      newTeacherName: tarBaseData.teacherName,
+      subject: mySubject,
+      gradeClass: myGradeClass,
+      type: 'SWAP',
+      createdAt: serverTimestamp()
+    });
+
+    // B. 상대방 원본 수업의 교체 내역 (상대방 -> 나)
+    const tarOvId = `${targetDate}_${targetPeriod}_${targetId}`;
+    const tarOvRef = doc(db, 'timetable_overrides', tarOvId);
+    transaction.set(tarOvRef, {
+      date: targetDate,
+      period: targetPeriod,
+      originalTeacherId: targetId,
+      newTeacherId: requesterId,
+      newTeacherName: reqBaseData.teacherName,
+      subject: targetSubject,
+      gradeClass: targetGradeClass,
+      type: 'SWAP',
+      createdAt: serverTimestamp()
+    });
+
+    // 9. 교체 로그 추가
     const replacementRef = doc(collection(db, 'replacements'));
     transaction.set(replacementRef, {
         type: 'SWAP',
@@ -200,7 +231,22 @@ export const executeMakeupTransaction = async (
     transaction.set(reqOvRef, { teacherId: requesterId, teacherName: reqBaseData.teacherName, date, slots: reqSlots });
     transaction.set(tarOvRef, { teacherId: targetId, teacherName: tarBaseData.teacherName, date, slots: tarSlots });
 
-    // 6. 보강 로그 기록
+    // 6. 실시간 연동용 timetable_overrides 기록
+    const makeupOvId = `${date}_${period}_${requesterId}`;
+    const makeupOvRef = doc(db, 'timetable_overrides', makeupOvId);
+    transaction.set(makeupOvRef, {
+      date,
+      period,
+      originalTeacherId: requesterId,
+      newTeacherId: targetId,
+      newTeacherName: tarBaseData.teacherName,
+      subject: subject,
+      gradeClass: gradeClass,
+      type: 'MAKEUP',
+      createdAt: serverTimestamp()
+    });
+
+    // 7. 보강 로그 기록
     const replacementRef = doc(collection(db, 'replacements'));
     transaction.set(replacementRef, {
         type: 'MAKEUP',
@@ -317,6 +363,15 @@ export const executeRollbackTransaction = async (recordId: string) => {
 
     // 3. Delete the Record
     transaction.delete(recordRef);
+
+    // 4. Delete associated timetable_overrides
+    const reqOvId = `${sourceDate}_${sourcePeriod}_${requestorId}`;
+    transaction.delete(doc(db, 'timetable_overrides', reqOvId));
+    
+    if (type === 'SWAP' && targetId && targetDate && targetPeriod) {
+       const tarOvId = `${targetDate}_${targetPeriod}_${targetId}`;
+       transaction.delete(doc(db, 'timetable_overrides', tarOvId));
+    }
   });
 };
 

@@ -87,6 +87,20 @@ export interface Override {
   slots: ClassSlot[]; // 해당 날짜의 전체(1~7교시) 스케줄
 }
 
+// Phase 13 신규: 개별 시간표 변동 기록 (실시간 연동용)
+export interface TimetableOverride {
+  id?: string; // `${date}_${period}_${originalTeacherId}`
+  date: string;
+  period: number;
+  originalTeacherId: string;
+  newTeacherId: string;
+  newTeacherName: string;
+  subject: string;
+  gradeClass: string;
+  type: 'SWAP' | 'MAKEUP';
+  createdAt: any;
+}
+
 export interface Todo {
   id?: string;
   userId: string;

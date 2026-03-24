@@ -3,8 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { CalendarRange, ChevronLeft, ChevronRight, Loader2, ArrowLeft, Plus } from 'lucide-react';
 import Header from '../components/Header';
 import { db } from '../lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
-import type { Timetable, ClassSlot } from '../types';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import type { Timetable, ClassSlot, TimetableOverride } from '../types';
 import { executeSwapTransaction } from '../utils/timetableApi';
 import { startOfWeek, addWeeks, subWeeks, format, addDays } from 'date-fns';
 import { Link } from 'react-router-dom';
@@ -15,6 +15,7 @@ const PERIODS = [1, 2, 3, 4, 5, 6, 7];
 const GlobalTimetablePage: React.FC = () => {
   const { user, userProfiles } = useAuth();
   const [allTimetables, setAllTimetables] = useState<Timetable[]>([]);
+  const [timetableOverrides, setTimetableOverrides] = useState<TimetableOverride[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -46,6 +47,28 @@ const GlobalTimetablePage: React.FC = () => {
 
     return () => unsubscribeTimetables();
   }, []);
+
+  // 2. 주간 변동 내역(timetable_overrides) 실시간 구독 (Phase 13)
+  useEffect(() => {
+    const weekEndDate = format(addDays(weekStartsOn, 5), 'yyyy-MM-dd');
+    const weekStartDate = format(weekStartsOn, 'yyyy-MM-dd');
+
+    const q = query(
+      collection(db, 'timetable_overrides'),
+      where('date', '>=', weekStartDate),
+      where('date', '<=', weekEndDate)
+    );
+
+    const unsubscribeOverrides = onSnapshot(q, (snapshot) => {
+      const ovs: TimetableOverride[] = [];
+      snapshot.forEach(docSnap => {
+        ovs.push({ id: docSnap.id, ...docSnap.data() } as TimetableOverride);
+      });
+      setTimetableOverrides(ovs);
+    });
+
+    return () => unsubscribeOverrides();
+  }, [currentDate]);
 
   const handleCellClick = async (timetable: Timetable, day: string, period: number, slot?: ClassSlot) => {
     if (processing) return;
@@ -256,20 +279,38 @@ const GlobalTimetablePage: React.FC = () => {
                           return PERIODS.map((period) => {
                             const slot = daySched?.slots.find(s => s.period === period);
                             const isSelected = selection?.teacherId === t.id && selection?.dayOfWeek === day && selection?.period === period;
-                            const hasClass = !!slot?.subject;
                             let cellBg = 'bg-white';
                             
+                            // 실시간 변동 내역 병합 (Phase 13)
+                            let displaySlot = slot ? { ...slot } : { period, subject: '', gradeClass: '' };
+                            const dateOfCell = format(addDays(weekStartsOn, DAYS.indexOf(day)), 'yyyy-MM-dd');
+                            
+                            const cellOverrides = timetableOverrides.filter(ov => ov.date === dateOfCell && ov.period === period);
+                            
+                            // A. 이 교사의 원래 수업이 나갔거나 바뀐 경우
+                            const myOutOv = cellOverrides.find(ov => ov.originalTeacherId === t.id);
+                            if (myOutOv) {
+                               displaySlot.subject = '';
+                               displaySlot.gradeClass = '';
+                            }
+                            
+                            // B. 이 교사가 다른 수업을 들어온 연우
+                            const myInOv = cellOverrides.find(ov => ov.newTeacherId === t.id);
+                            if (myInOv) {
+                               displaySlot.subject = myInOv.subject + (myInOv.type === 'MAKEUP' ? ' (보강)' : ' (대강)');
+                               displaySlot.gradeClass = myInOv.gradeClass;
+                            }
+
+                            const hasMergedClass = !!displaySlot.subject;
+
                             if (isSelected) {
                               cellBg = 'bg-blue-100 outline outline-2 outline-blue-500 z-10';
                             } else if (selection) {
-                                // 내가 뭔가를 선택했을 때, 상대방의 수업 셀은 호버 효과 제공 (시각적 힌트)
-                                if (!isMe && hasClass) cellBg = 'bg-white hover:bg-slate-100 cursor-pointer';
-                                if (isMe && hasClass) cellBg = 'bg-slate-50/50 cursor-pointer'; // 다른 나의 수업들
-                            } else if (isMe && hasClass) {
+                                if (!isMe && hasMergedClass) cellBg = 'bg-white hover:bg-slate-100 cursor-pointer';
+                                if (isMe && hasMergedClass) cellBg = 'bg-slate-50/50 cursor-pointer'; 
+                            } else if (isMe && hasMergedClass) {
                                 cellBg = 'bg-blue-50/50 hover:bg-blue-100 cursor-pointer';
-                            } else if (!isMe && hasClass) {
-                                cellBg = 'bg-white cursor-default'; // 상대방 수업 클릭 불가 (내 수업 먼저 선택 안했을시)
-                                // 단, 상호공강 확인을 위해 상대방 수업 클릭하면 먼저 내꺼 선택하라고 alert 뜨도록 클릭이벤트는 항상 열어둠
+                            } else if (!isMe && hasMergedClass) {
                                 cellBg = 'bg-white hover:bg-slate-50 cursor-pointer';
                             }
 
@@ -280,13 +321,15 @@ const GlobalTimetablePage: React.FC = () => {
                                 className={`border border-slate-300 p-0 text-center relative font-sans ${cellBg}`}
                                 style={{ height: '42px', verticalAlign: 'middle', userSelect: 'none' }}
                               >
-                                {hasClass ? (
+                                {hasMergedClass ? (
                                   <div className="flex flex-col items-center justify-center w-full h-full px-0.5 leading-[1.2]">
-                                    <div className={`font-bold text-[11px] truncate w-full ${isSelected ? 'text-blue-800' : (slot.subject === '역사' || slot.subject === '도덕' || slot.subject === '체육' ? 'text-blue-600' : slot.subject === '과학' || slot.subject === '기술가정' ? 'text-red-600' : 'text-slate-800')}`}>
-                                      {slot.subject}
+                                    <div className={`font-bold text-[11px] truncate w-full ${isSelected ? 'text-blue-800' : (displaySlot.subject.includes('(보강)') ? 'text-orange-600' : displaySlot.subject.includes('(대강)') ? 'text-brand-600' : (displaySlot.subject === '역사' || displaySlot.subject === '도덕' || displaySlot.subject === '체육' ? 'text-blue-600' : displaySlot.subject === '과학' || displaySlot.subject === '기술가정' ? 'text-red-600' : 'text-slate-800'))}`}>
+                                      {displaySlot.subject.replace(' (보강)', '').replace(' (대강)', '')}
+                                      {displaySlot.subject.includes('(보강)') && <span className="block text-[8px] leading-tight text-orange-500">보강</span>}
+                                      {displaySlot.subject.includes('(대강)') && <span className="block text-[8px] leading-tight text-brand-500">대강</span>}
                                     </div>
                                     <div className="text-[10px] font-medium text-slate-600 truncate w-full mt-[1px]">
-                                      {slot.gradeClass}
+                                      {displaySlot.gradeClass}
                                     </div>
                                   </div>
                                 ) : null}
