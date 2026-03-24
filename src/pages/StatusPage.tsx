@@ -9,7 +9,7 @@ import Header from '../components/Header';
 import { executeRollbackTransaction } from '../utils/timetableApi';
 
 const StatusPage: React.FC = () => {
-  const { user, userProfiles } = useAuth();
+  const { user, userData, userProfiles } = useAuth();
   const [records, setRecords] = useState<ReplacementRecord[]>([]);
   const [filter, setFilter] = useState<'all' | 'mine'>('all');
   const [loading, setLoading] = useState(true);
@@ -33,12 +33,20 @@ const StatusPage: React.FC = () => {
     fetchRecords();
   }, []);
 
-  const handleRollback = async (recordId: string) => {
+  const handleRollback = async (record: ReplacementRecord) => {
+    const isMine = record.requestorId === user?.uid || record.targetId === user?.uid;
+    const isAdmin = userData?.isAdmin === true;
+
+    if (!isMine && !isAdmin) {
+      alert("본인의 교체 건만 취소할 수 있습니다.");
+      return;
+    }
+
     if (!window.confirm("이 시간표 변동 건을 취소하고 원래대로 되돌리시겠습니까?")) return;
 
-    setRollbackLoading(recordId);
+    setRollbackLoading(record.id!);
     try {
-      await executeRollbackTransaction(recordId);
+      await executeRollbackTransaction(record.id!);
       alert('성공적으로 원상 복구되었습니다.');
       fetchRecords(); 
     } catch (error: any) {
@@ -165,23 +173,25 @@ const StatusPage: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-4 px-6 text-right">
-                           <button 
-                             onClick={() => handleRollback(record.id!)}
-                             disabled={rollbackLoading === record.id}
-                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all
-                               ${rollbackLoading === record.id 
-                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                                 : 'bg-white border-2 border-slate-200 text-slate-500 hover:border-red-500 hover:text-red-600 active:scale-95 shadow-sm'
-                               }
-                             `}
-                           >
-                              {rollbackLoading === record.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <XCircle className="w-3.5 h-3.5" />
-                              )}
-                              취소
-                           </button>
+                           {(isMine || userData?.isAdmin) && record.status === 'APPROVED' && (
+                             <button 
+                               onClick={() => handleRollback(record)}
+                               disabled={rollbackLoading === record.id}
+                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all
+                                 ${rollbackLoading === record.id 
+                                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                                   : 'bg-white border-2 border-slate-200 text-slate-500 hover:border-red-500 hover:text-red-600 active:scale-95 shadow-sm'
+                                 }
+                               `}
+                             >
+                                {rollbackLoading === record.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <XCircle className="w-3.5 h-3.5" />
+                                )}
+                                취소
+                             </button>
+                           )}
                         </td>
                       </tr>
                     );

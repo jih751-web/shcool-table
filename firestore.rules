@@ -50,7 +50,14 @@ service cloud.firestore {
     
     // 3. 교체 기록 및 알림 (누구나 쓰기 가능해야 상호 공강 요청/알림 전송 가능)
     match /replacements/{repId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        request.auth.uid == resource.data.requestorId || 
+        request.auth.uid == resource.data.targetId || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+        request.auth.token.email == 'jih751@gmail.com'
+      );
     }
     match /notifications/{notifId} {
       allow read: if request.auth != null && resource.data.targetUid == request.auth.uid;
@@ -84,7 +91,13 @@ service cloud.firestore {
     // 7. 실시간 개별 시간표 변동 (timetable_overrides) - Phase 13
     match /timetable_overrides/{overrideId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        request.auth.uid == resource.data.originalTeacherId || 
+        request.auth.uid == resource.data.newTeacherId || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+        request.auth.token.email == 'jih751@gmail.com'
+      );
     }
   }
 }
