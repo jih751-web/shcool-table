@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share } from 'lucide-react';
+import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share, Megaphone, Edit2 } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo, TimetableOverride } from '../types';
 
 import SmartReplacementModal from '../components/SmartReplacementModal';
@@ -91,6 +91,8 @@ export default function DashboardPage() {
   // Todo 상태
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todoInput, setTodoInput] = useState('');
+  const [dashNotice, setDashNotice] = useState<string>('');
+  const [isNoticeLoading, setIsNoticeLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   
   // PWA Install Prompt State (초안전 모드 관리)
@@ -271,6 +273,50 @@ export default function DashboardPage() {
 
     fetchMealData();
   }, [currentDateStr]);
+
+  // 오늘의 한 줄 공지 실시간 구독
+  useEffect(() => {
+    const noticeRef = doc(db, 'settings', 'dashboard_notice');
+    const unsubscribe = onSnapshot(noticeRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setDashNotice(docSnap.data().text || '');
+      } else {
+        setDashNotice('오늘의 공지사항이 없습니다.');
+      }
+      setIsNoticeLoading(false);
+    }, (err) => {
+      console.error("Notice onSnapshot error:", err);
+      setIsNoticeLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleEditNotice = async () => {
+    if (!userData?.isAdmin) return;
+    const newNotice = window.prompt("오늘의 한 줄 공지를 입력하세요 (최대 50자)", dashNotice);
+    if (newNotice !== null) {
+      try {
+        await updateDoc(doc(db, 'settings', 'dashboard_notice'), {
+          text: newNotice.trim() || '오늘의 공지사항이 없습니다.',
+          updatedAt: serverTimestamp(),
+          updatedBy: user?.uid
+        }).catch(async (err) => {
+          // 문서가 없을 경우 생성
+          if (err.code === 'not-found') {
+            await setDoc(doc(db, 'settings', 'dashboard_notice'), {
+              text: newNotice.trim() || '오늘의 공지사항이 없습니다.',
+              updatedAt: serverTimestamp(),
+              updatedBy: user?.uid
+            });
+          } else {
+             throw err;
+          }
+        });
+      } catch (e: any) {
+        alert("공지 수정 실패: " + e.message);
+      }
+    }
+  };
 
   // 5. 할 일 목록(Todo) 실시간 구독
   useEffect(() => {
@@ -593,6 +639,32 @@ export default function DashboardPage() {
 
           {/* Column 2: Timeline & To-Do List */}
           <div className="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col relative min-h-[500px]">
+            
+            {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 */}
+            <div className="bg-yellow-50/80 border-l-4 border-yellow-400 p-3 px-5 flex items-center justify-between shrink-0 group transition-all hover:bg-yellow-100/80">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="p-1.5 bg-yellow-200/50 rounded-lg shrink-0">
+                  <Megaphone className="w-4 h-4 text-yellow-700 animate-bounce-slow" />
+                </div>
+                {isNoticeLoading ? (
+                  <div className="w-20 h-4 bg-yellow-200/20 animate-pulse rounded"></div>
+                ) : (
+                  <p className="text-[14px] font-bold text-slate-700 tracking-tight truncate leading-tight break-keep">
+                    {dashNotice}
+                  </p>
+                )}
+              </div>
+              
+              {userData?.isAdmin && (
+                <button 
+                  onClick={handleEditNotice}
+                  className="p-1.5 hover:bg-yellow-200/50 rounded-lg text-yellow-700 transition-all opacity-0 group-hover:opacity-100"
+                  title="공지 수정"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
             {/* Date Navigation Bar */}
             <div className="bg-brand-50 border-b border-brand-100 p-4 pb-3 flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
