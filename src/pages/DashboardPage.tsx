@@ -644,25 +644,25 @@ export default function DashboardPage() {
           {/* Column 2: Timeline & To-Do List */}
           <div className="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col relative min-h-[500px]">
             
-            {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 (누구나 수정 가능, 자동 높이) */}
+            {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 (누구나 수정 가능, 자동 높이, 겹침 방지) */}
             <div 
               onClick={handleEditNotice}
-              className="bg-yellow-50/80 border-l-4 border-yellow-400 p-5 px-8 flex flex-col justify-center shrink-0 group transition-all hover:bg-yellow-100/80 cursor-pointer min-h-[110px] h-auto mb-6 relative"
+              className="bg-yellow-50/80 border-l-4 border-yellow-400 p-5 px-6 flex items-center justify-between shrink-0 group transition-all hover:bg-yellow-100/80 cursor-pointer min-h-[110px] h-auto mb-6 shadow-sm"
             >
-              <div className="flex items-center gap-4 overflow-visible w-full">
-                <div className="p-2 bg-yellow-200/50 rounded-xl shrink-0">
+              <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
+                <div className="p-2 bg-yellow-200/50 rounded-xl shrink-0 self-center">
                   <Megaphone className="w-5 h-5 text-yellow-700 animate-bounce-slow" />
                 </div>
                 {isNoticeLoading ? (
-                  <div className="w-32 h-5 bg-yellow-200/20 animate-pulse rounded-lg"></div>
+                  <div className="w-32 h-5 bg-yellow-200/20 animate-pulse rounded-lg flex-1"></div>
                 ) : (
-                  <p className="text-[15.5px] font-black text-slate-800 tracking-tight leading-relaxed break-keep whitespace-normal w-full py-1 pointer-events-none">
+                  <p className="text-[15.5px] font-black text-slate-800 tracking-tight leading-relaxed break-all whitespace-normal pointer-events-none flex-1">
                     {dashNotice}
                   </p>
                 )}
               </div>
               
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <div className="shrink-0 self-center">
                 <div className="p-2 hover:bg-yellow-200/50 rounded-xl text-yellow-700 transition-all opacity-30 group-hover:opacity-100">
                   <Edit2 className="w-4 h-4" />
                 </div>
