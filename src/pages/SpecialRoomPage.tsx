@@ -20,9 +20,10 @@ interface BookingCellProps {
   date: string;
   period: number;
   globalBooking: RoomBooking | undefined;
+  onRequestCancel: (roomId: string, date: string, period: number) => void;
 }
 
-const BookingCell = memo(({ roomId, roomName, date, period, globalBooking }: BookingCellProps) => {
+const BookingCell = memo(({ roomId, roomName, date, period, globalBooking, onRequestCancel }: BookingCellProps) => {
   const { user, userData, userProfiles } = useAuth();
   const [optimisticBooking, setOptimisticBooking] = useState<RoomBooking | null | undefined>(undefined);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -118,14 +119,6 @@ const BookingCell = memo(({ roomId, roomName, date, period, globalBooking }: Boo
   );
 });
 
-interface BookingCellProps {
-  roomId: string;
-  roomName: string;
-  date: string;
-  period: number;
-  globalBooking: RoomBooking | undefined;
-  onRequestCancel: (roomId: string, date: string, period: number) => void;
-}
 
 // --- 2. 메인 페이지 컴포넌트 ---
 const SpecialRoomPage: React.FC = () => {
