@@ -11,6 +11,7 @@ import SpecialRoomPage from './pages/SpecialRoomPage';
 import NotificationToast from './components/NotificationToast';
 
 import AdminUserPage from './pages/AdminUserPage';
+import SiteGuard from './components/SiteGuard';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -122,9 +123,11 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Router>
-          <AppRoutes />
-        </Router>
+        <SiteGuard>
+          <Router>
+            <AppRoutes />
+          </Router>
+        </SiteGuard>
       </AuthProvider>
     </ErrorBoundary>
   );
