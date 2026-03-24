@@ -302,9 +302,12 @@ const GlobalTimetablePage: React.FC = () => {
                             }
 
                             const hasMergedClass = !!displaySlot.subject;
+                            const isOverridden = !!myInOv || !!myOutOv;
 
                             if (isSelected) {
                               cellBg = 'bg-blue-100 outline outline-2 outline-blue-500 z-10';
+                            } else if (isOverridden) {
+                              cellBg = 'bg-yellow-50 outline outline-1 outline-yellow-400/30 z-10 hover:bg-yellow-100/50 cursor-pointer';
                             } else if (selection) {
                                 if (!isMe && hasMergedClass) cellBg = 'bg-white hover:bg-slate-100 cursor-pointer';
                                 if (isMe && hasMergedClass) cellBg = 'bg-slate-50/50 cursor-pointer'; 
@@ -325,13 +328,15 @@ const GlobalTimetablePage: React.FC = () => {
                                   <div className="flex flex-col items-center justify-center w-full h-full px-0.5 leading-[1.2]">
                                     <div className={`font-bold text-[11px] truncate w-full ${isSelected ? 'text-blue-800' : (displaySlot.subject.includes('(보강)') ? 'text-orange-600' : displaySlot.subject.includes('(대강)') ? 'text-brand-600' : (displaySlot.subject === '역사' || displaySlot.subject === '도덕' || displaySlot.subject === '체육' ? 'text-blue-600' : displaySlot.subject === '과학' || displaySlot.subject === '기술가정' ? 'text-red-600' : 'text-slate-800'))}`}>
                                       {displaySlot.subject.replace(' (보강)', '').replace(' (대강)', '')}
-                                      {displaySlot.subject.includes('(보강)') && <span className="block text-[8px] leading-tight text-orange-500">보강</span>}
-                                      {displaySlot.subject.includes('(대강)') && <span className="block text-[8px] leading-tight text-brand-500">대강</span>}
+                                      {displaySlot.subject.includes('(보강)') && <span className="block text-[8px] leading-tight text-orange-500 bg-orange-50/50 rounded mt-0.5">보강</span>}
+                                      {displaySlot.subject.includes('(대강)') && <span className="block text-[8px] leading-tight text-brand-500 bg-brand-50/50 rounded mt-0.5">대강</span>}
                                     </div>
                                     <div className="text-[10px] font-medium text-slate-600 truncate w-full mt-[1px]">
                                       {displaySlot.gradeClass}
                                     </div>
                                   </div>
+                                ) : isOverridden ? (
+                                   <div className="text-[9px] font-bold text-slate-400 italic">변경됨</div>
                                 ) : null}
                               </td>
                             );

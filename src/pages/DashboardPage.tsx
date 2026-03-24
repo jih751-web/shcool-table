@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc, orderBy } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo, TimetableOverride } from '../types';
 
 import SmartReplacementModal from '../components/SmartReplacementModal';
@@ -666,7 +666,9 @@ export default function DashboardPage() {
                         onClick={() => handleCardClick(slot)}
                         className={`relative py-2 px-3 rounded-xl border-2 transition-all flex items-center justify-between gap-3
                           ${hasClass 
-                            ? 'bg-white border-slate-200 hover:border-brand-500 hover:shadow-lg cursor-pointer group' 
+                            ? (slot.subject.includes('(보강)') || slot.subject.includes('(대강)')
+                                ? 'bg-yellow-50 border-yellow-200 hover:border-brand-500 hover:shadow-lg cursor-pointer group'
+                                : 'bg-white border-slate-200 hover:border-brand-500 hover:shadow-lg cursor-pointer group')
                             : 'bg-slate-100/50 border-transparent border-dashed hover:bg-slate-100 cursor-default'
                           }
                         `}
