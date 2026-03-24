@@ -101,10 +101,7 @@ service cloud.firestore {
     // 8. 시스템 설정 (오늘의 한 줄 공지 등)
     match /settings/{docId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
-        request.auth.token.email == 'jih751@gmail.com'
-      );
+      allow write: if request.auth != null;
     }
   }
 }

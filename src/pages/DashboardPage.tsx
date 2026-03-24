@@ -292,19 +292,23 @@ export default function DashboardPage() {
   }, []);
 
   const handleEditNotice = async () => {
-    if (!userData?.isAdmin) return;
-    const newNotice = window.prompt("오늘의 한 줄 공지를 입력하세요 (최대 50자)", dashNotice);
+    let newNotice = window.prompt("오늘의 한 줄 공지(화이트보드)를 입력하세요 (최대 100자)", dashNotice);
     if (newNotice !== null) {
+      if (newNotice.length > 100) {
+        alert("공지사항은 최대 100자까지만 입력할 수 있습니다. 100자 이후는 자동으로 삭제됩니다.");
+        newNotice = newNotice.substring(0, 100);
+      }
+      const finalNotice = newNotice.trim() || '오늘의 공지사항이 없습니다.';
       try {
         await updateDoc(doc(db, 'settings', 'dashboard_notice'), {
-          text: newNotice.trim() || '오늘의 공지사항이 없습니다.',
+          text: finalNotice,
           updatedAt: serverTimestamp(),
           updatedBy: user?.uid
         }).catch(async (err) => {
           // 문서가 없을 경우 생성
           if (err.code === 'not-found') {
             await setDoc(doc(db, 'settings', 'dashboard_notice'), {
-              text: newNotice.trim() || '오늘의 공지사항이 없습니다.',
+              text: finalNotice,
               updatedAt: serverTimestamp(),
               updatedBy: user?.uid
             });
@@ -640,30 +644,29 @@ export default function DashboardPage() {
           {/* Column 2: Timeline & To-Do List */}
           <div className="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col relative min-h-[500px]">
             
-            {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 */}
-            <div className="bg-yellow-50/80 border-l-4 border-yellow-400 p-3 px-5 flex items-center justify-between shrink-0 group transition-all hover:bg-yellow-100/80">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className="p-1.5 bg-yellow-200/50 rounded-lg shrink-0">
+            {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 (누구나 수정 가능, 자동 높이) */}
+            <div 
+              onClick={handleEditNotice}
+              className="bg-yellow-50/80 border-l-4 border-yellow-400 p-3 px-5 flex items-center justify-between shrink-0 group transition-all hover:bg-yellow-100/80 cursor-pointer min-h-[44px] h-auto"
+            >
+              <div className="flex items-center gap-3 overflow-visible w-full">
+                <div className="p-1.5 bg-yellow-200/50 rounded-lg shrink-0 self-start mt-0.5">
                   <Megaphone className="w-4 h-4 text-yellow-700 animate-bounce-slow" />
                 </div>
                 {isNoticeLoading ? (
                   <div className="w-20 h-4 bg-yellow-200/20 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-[14px] font-bold text-slate-700 tracking-tight truncate leading-tight break-keep">
+                  <p className="text-[14px] font-bold text-slate-700 tracking-tight leading-relaxed break-keep whitespace-normal w-full py-0.5 pointer-events-none">
                     {dashNotice}
                   </p>
                 )}
               </div>
               
-              {userData?.isAdmin && (
-                <button 
-                  onClick={handleEditNotice}
-                  className="p-1.5 hover:bg-yellow-200/50 rounded-lg text-yellow-700 transition-all opacity-0 group-hover:opacity-100"
-                  title="공지 수정"
-                >
+              <div className="ml-2 shrink-0 self-start mt-1">
+                <div className="p-1.5 hover:bg-yellow-200/50 rounded-lg text-yellow-700 transition-all opacity-40 group-hover:opacity-100">
                   <Edit2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+                </div>
+              </div>
             </div>
             {/* Date Navigation Bar */}
             <div className="bg-brand-50 border-b border-brand-100 p-4 pb-3 flex flex-col items-center gap-3">
