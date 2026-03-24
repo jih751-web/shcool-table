@@ -785,12 +785,15 @@ export default function DashboardPage() {
 
               {/* Main Action Area - 패딩 축소 */}
               <div className="flex-1 p-6 flex flex-col items-center justify-between bg-slate-50/30">
-                <div className="text-center space-y-3">
-                  <p className="text-slate-500 font-bold text-sm leading-relaxed">
-                    학교 규정, 학술 자료, 복무 지침 등<br/>
-                    궁금한 모든 것을 울릉이에게 물어보세요!
-                  </p>
-                </div>
+                 <div className="text-center space-y-2">
+                   <p className="text-slate-500 font-bold text-[13px] leading-tight break-keep whitespace-normal">
+                     학교 규정, 학술 자료, 복무 지침 등<br/>
+                     궁금한 모든 것을 울릉이에게 물어보세요!
+                   </p>
+                   <p className="text-brand-600/70 font-black text-[11px] leading-tight mt-2 opacity-80">
+                     ※ 울릉이에게 한 개별 질문은 그 누구도 알 수 없습니다.
+                   </p>
+                 </div>
 
                 {/* NotebookLM Button */}
                 <a 
