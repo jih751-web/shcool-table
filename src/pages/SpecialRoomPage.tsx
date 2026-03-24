@@ -26,7 +26,8 @@ const BookingCell = memo(({ roomId, roomName, date, period, globalBooking }: Boo
   const { user, userData, userProfiles } = useAuth();
   const [optimisticBooking, setOptimisticBooking] = useState<RoomBooking | null | undefined>(undefined);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showConfirmCancel, setShowConfirmCancel] = useState(false);
+  
+  // 개별 셀 내에서의 ConfirmModal 제거 (부모에서 통합 관리)
 
   useEffect(() => {
     setOptimisticBooking(undefined);
@@ -35,35 +36,29 @@ const BookingCell = memo(({ roomId, roomName, date, period, globalBooking }: Boo
   const displayBooking = optimisticBooking !== undefined ? optimisticBooking : globalBooking;
   const isMyBooking = displayBooking?.teacherId === user?.uid;
 
-  const handleCancelClick = () => {
+  const handleCancelClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (isProcessing) return;
     if (displayBooking?.teacherId !== user?.uid) {
       alert('이미 타인이 예약한 공간입니다.');
       return;
     }
-    setShowConfirmCancel(true);
+    // 부모의 handleRequestCancel 호출
+    onRequestCancel(roomId, date, period);
   };
 
-  const handleConfirmCancel = async () => {
-    setIsProcessing(true);
-    setOptimisticBooking(null);
+  // handleConfirmCancel 제거 (부모에서 통합 관리)
 
-    try {
-      const docId = `${roomId}_${date}_${period}`;
-      await deleteDoc(doc(db, 'reservations', docId));
-    } catch (e: any) {
-      alert(`취소 실패: ${e.message}`);
-      setOptimisticBooking(undefined);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleClick = async () => {
+  const handleClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (isProcessing) return;
 
     if (displayBooking) {
-      handleCancelClick();
+      handleCancelClick(e);
     } else {
       setIsProcessing(true);
       const newBooking: RoomBooking = {
@@ -119,19 +114,18 @@ const BookingCell = memo(({ roomId, roomName, date, period, globalBooking }: Boo
           <span className="text-[11px] font-black tracking-tight">+ 예약</span>
         )}
       </button>
-
-      <ConfirmModal 
-        isOpen={showConfirmCancel}
-        onClose={() => setShowConfirmCancel(false)}
-        onConfirm={handleConfirmCancel}
-        type="danger"
-        title="예약 취소"
-        message={`${date} (${period}교시) 예약을 취소하시겠습니까?`}
-        confirmText="예약 취소"
-      />
     </td>
   );
 });
+
+interface BookingCellProps {
+  roomId: string;
+  roomName: string;
+  date: string;
+  period: number;
+  globalBooking: RoomBooking | undefined;
+  onRequestCancel: (roomId: string, date: string, period: number) => void;
+}
 
 // --- 2. 메인 페이지 컴포넌트 ---
 const SpecialRoomPage: React.FC = () => {
@@ -140,6 +134,17 @@ const SpecialRoomPage: React.FC = () => {
   const [bookingsMap, setBookingsMap] = useState<Record<string, RoomBooking>>({});
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isManageMode, setIsManageMode] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState<{
+    isOpen: boolean;
+    roomId: string;
+    date: string;
+    period: number;
+  }>({
+    isOpen: false,
+    roomId: '',
+    date: '',
+    period: 0
+  });
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -216,6 +221,27 @@ const SpecialRoomPage: React.FC = () => {
 
     return () => unsubscribe();
   }, [selectedRoom, weekStartsOnStr]); // Date 객체 대신 문자열 의존성 사용
+
+  const handleRequestCancel = (roomId: string, date: string, period: number) => {
+    setConfirmCancel({
+      isOpen: true,
+      roomId,
+      date,
+      period
+    });
+  };
+
+  const handleConfirmCancel = async () => {
+    const { roomId, date, period } = confirmCancel;
+    try {
+      const docId = `${roomId}_${date}_${period}`;
+      await deleteDoc(doc(db, 'reservations', docId));
+    } catch (e: any) {
+      alert(`취소 실패: ${e.message}`);
+    } finally {
+      setConfirmCancel(prev => ({ ...prev, isOpen: false }));
+    }
+  };
 
   const selectedRoomName = rooms.find(r => r.id === selectedRoom)?.name || '';
 
@@ -340,6 +366,7 @@ const SpecialRoomPage: React.FC = () => {
                         date={targetDate}
                         period={period}
                         globalBooking={bookingsMap[key]}
+                        onRequestCancel={handleRequestCancel}
                       />
                     );
                   })}
@@ -354,6 +381,16 @@ const SpecialRoomPage: React.FC = () => {
         isOpen={isManageMode}
         onClose={() => setIsManageMode(false)}
         rooms={rooms}
+      />
+
+      <ConfirmModal 
+        isOpen={confirmCancel.isOpen}
+        onClose={() => setConfirmCancel(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmCancel}
+        type="danger"
+        title="예약 취소"
+        message={`${confirmCancel.date} (${confirmCancel.period}교시) 예약을 취소하시겠습니까?`}
+        confirmText="예약 취소"
       />
     </div>
   );

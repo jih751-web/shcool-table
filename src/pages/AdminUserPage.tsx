@@ -5,12 +5,27 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import type { Teacher } from '../types';
 import { Shield, UserMinus, UserCheck, Search, Users, Trash2, ArrowLeft } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 
 const AdminUserPage: React.FC = () => {
   const { userData } = useAuth();
   const [users, setUsers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // 팝업 상태 관리
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'info' | 'success';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'users'), (snap) => {
@@ -25,25 +40,36 @@ const AdminUserPage: React.FC = () => {
     return () => unsub();
   }, []);
 
-  const toggleBlock = async (uid: string, currentStatus: boolean) => {
+  const toggleBlock = async (e: React.MouseEvent, uid: string, currentStatus: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log("차단 토글 버튼 정확히 클릭됨! UID: ", uid);
     if (uid === userData?.uid) {
       alert("자기 자신을 차단할 수 없습니다.");
       return;
     }
     
-    if (!confirm(`${currentStatus ? '차단을 해제' : '차단'} 하겠습니까?`)) return;
-
-    try {
-      await updateDoc(doc(db, 'users', uid), {
-        isBlocked: !currentStatus
-      });
-    } catch (error) {
-      console.error("Error updating user status:", error);
-      alert("상태 변경에 실패했습니다.");
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: `${currentStatus ? '차단 해제' : '사용자 차단'}`,
+      message: `정말 이 사용자를 ${currentStatus ? '차단 해제' : '차단'} 하시겠습니까?`,
+      type: currentStatus ? 'info' : 'danger',
+      onConfirm: async () => {
+        try {
+          await updateDoc(doc(db, 'users', uid), {
+            isBlocked: !currentStatus
+          });
+        } catch (error) {
+          console.error("Error updating user status:", error);
+          alert("상태 변경에 실패했습니다.");
+        }
+      }
+    });
   };
 
   const handleDeleteUser = async (e: React.MouseEvent, targetUserId: string, userName: string) => {
+    console.log("사용자 추방 버튼 정확히 클릭됨! UID: ", targetUserId);
     // 3. 이벤트 전파 완벽 차단
     e.preventDefault();
     e.stopPropagation();
@@ -56,47 +82,52 @@ const AdminUserPage: React.FC = () => {
       return;
     }
 
-    // 2. 브라우저 기본 경고창(window.confirm)으로 통일
-    if (!window.confirm("정말 이 사용자를 추방하시겠습니까? 관련된 모든 데이터가 영구 삭제됩니다.")) return;
+    setConfirmConfig({
+      isOpen: true,
+      title: "사용자 추방",
+      message: "정말 이 사용자를 추방하시겠습니까? 관련된 모든 데이터가 영구 삭제됩니다.",
+      type: "danger",
+      onConfirm: async () => {
+        try {
+          console.log("--- 추방 및 연쇄 삭제 시작 ---");
 
-    try {
-      console.log("--- 추방 및 연쇄 삭제 시작 ---");
+          // 1단계: users 컬렉션에서 해당 사용자 문서 진짜로 삭제
+          await deleteDoc(doc(db, "users", targetUserId));
+          console.log("1단계: 사용자 프로필 삭제 완료");
 
-      // 1단계: users 컬렉션에서 해당 사용자 문서 진짜로 삭제
-      await deleteDoc(doc(db, "users", targetUserId));
-      console.log("1단계: 사용자 프로필 삭제 완료");
+          // 2단계: 연쇄 삭제 (timetables, reservations, overrides)
+          const deletePromises: Promise<void>[] = [];
+          deletePromises.push(deleteDoc(doc(db, "timetables", targetUserId)));
 
-      // 2단계: 연쇄 삭제 (timetables, reservations, overrides)
-      const deletePromises: Promise<void>[] = [];
-      deletePromises.push(deleteDoc(doc(db, "timetables", targetUserId)));
+          const reservationsRef = collection(db, "reservations");
+          const qRes = query(reservationsRef, where("userId", "==", targetUserId));
+          const resSnap = await getDocs(qRes);
+          resSnap.forEach((document) => {
+            deletePromises.push(deleteDoc(doc(db, "reservations", document.id)));
+          });
 
-      const reservationsRef = collection(db, "reservations");
-      const qRes = query(reservationsRef, where("userId", "==", targetUserId));
-      const resSnap = await getDocs(qRes);
-      resSnap.forEach((document) => {
-        deletePromises.push(deleteDoc(doc(db, "reservations", document.id)));
-      });
+          const overridesRef = collection(db, "overrides");
+          const qOvr = query(overridesRef, where("teacherId", "==", targetUserId));
+          const ovrSnap = await getDocs(qOvr);
+          ovrSnap.forEach((document) => {
+            deletePromises.push(deleteDoc(doc(db, "overrides", document.id)));
+          });
 
-      const overridesRef = collection(db, "overrides");
-      const qOvr = query(overridesRef, where("teacherId", "==", targetUserId));
-      const ovrSnap = await getDocs(qOvr);
-      ovrSnap.forEach((document) => {
-        deletePromises.push(deleteDoc(doc(db, "overrides", document.id)));
-      });
+          await Promise.all(deletePromises);
+          console.log("2단계: 연쇄 데이터(시간표, 예약 등) 삭제 완료");
 
-      await Promise.all(deletePromises);
-      console.log("2단계: 연쇄 데이터(시간표, 예약 등) 삭제 완료");
+          // 3단계: 화면 새로고침 없이 즉시 목록에서 제거 (상태 업데이트)
+          setUsers(prev => prev.filter(user => user.uid !== targetUserId));
+          
+          console.log("추방 및 연쇄 삭제 완전 성공");
+          alert(`${userName} 선생님의 모든 데이터가 성공적으로 삭제되었습니다.`);
 
-      // 3단계: 화면 새로고침 없이 즉시 목록에서 제거 (상태 업데이트)
-      setUsers(prev => prev.filter(user => user.uid !== targetUserId));
-      
-      console.log("추방 및 연쇄 삭제 완전 성공");
-      alert(`${userName} 선생님의 모든 데이터가 성공적으로 삭제되었습니다.`);
-
-    } catch (error) {
-      console.error("추방 로직 에러: ", error);
-      alert("추방 처리 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
-    }
+        } catch (error) {
+          console.error("추방 로직 에러: ", error);
+          alert("추방 처리 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
+        }
+      }
+    });
   };
 
   const filteredUsers = users.filter(u => 
@@ -212,9 +243,10 @@ const AdminUserPage: React.FC = () => {
                       <td className="px-6 py-5 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => toggleBlock(user.uid, !!user.isBlocked)}
+                            type="button"
+                            onClick={(e) => toggleBlock(e, user.uid, !!user.isBlocked)}
                             disabled={user.uid === userData?.uid}
-                            className={`p-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
+                            className={`relative z-10 p-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
                               user.isBlocked
                                 ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-200'
                                 : 'bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200'
@@ -232,7 +264,7 @@ const AdminUserPage: React.FC = () => {
                             type="button"
                             onClick={(e) => handleDeleteUser(e, user.uid, user.name)}
                             disabled={user.uid === userData?.uid}
-                            className="p-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 shadow-sm shadow-rose-200 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="relative z-10 p-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 shadow-sm shadow-rose-200 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                             title="추방(삭제)하기"
                           >
                             <Trash2 className="w-5 h-5" />
@@ -247,6 +279,15 @@ const AdminUserPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+      />
     </div>
   );
 };

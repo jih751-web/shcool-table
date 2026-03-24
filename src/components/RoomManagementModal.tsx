@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, MonitorPlay, AlertCircle, Loader2 } from 'lucide-react';
-import { collection, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { SpecialRoom } from '../types';
+
 import ConfirmModal from './ConfirmModal';
 
 interface Props {
@@ -12,16 +13,21 @@ interface Props {
 }
 
 export default function RoomManagementModal({ isOpen, onClose, rooms }: Props) {
-  const [newRoomName, setNewRoomName] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
-  
-  // 확인 모달 관련 상태
-  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [showAddInput, setShowAddInput] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; roomId: string; roomName: string }>({
+    isOpen: false,
+    roomId: '',
+    roomName: ''
+  });
 
   const handleAddRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoomName.trim() || isAdding) return;
+    e.stopPropagation();
+    
+    if (!newRoomName || !newRoomName.trim() || isAdding) return;
 
     if (rooms.find(r => r.name === newRoomName.trim())) {
       alert('이미 등록된 특별실입니다.');
@@ -35,6 +41,7 @@ export default function RoomManagementModal({ isOpen, onClose, rooms }: Props) {
         createdAt: serverTimestamp() 
       });
       setNewRoomName('');
+      setShowAddInput(false);
     } catch (e: any) {
       alert(`추가 실패: ${e.message}`);
     } finally {
@@ -42,10 +49,26 @@ export default function RoomManagementModal({ isOpen, onClose, rooms }: Props) {
     }
   };
 
-  const handleDeleteRoom = async (roomId: string) => {
+  const handleDeleteRoomRequest = (e: React.MouseEvent, roomId: string, roomName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setConfirmDelete({ isOpen: true, roomId, roomName });
+  };
+
+  const handleConfirmDelete = async () => {
+    const { roomId } = confirmDelete;
     setIsDeleting(roomId);
+    setConfirmDelete(prev => ({ ...prev, isOpen: false }));
     try {
+      // 1단계: 특별실 문서 삭제
       await deleteDoc(doc(db, 'specialRooms', roomId));
+
+      // 2단계: 관련 예약 데이터 연쇄 삭제
+      const q = query(collection(db, 'reservations'), where('roomId', '==', roomId));
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+      await Promise.all(deletePromises);
+      
     } catch (e: any) {
       alert(`삭제 실패: ${e.message}`);
     } finally {
@@ -58,9 +81,16 @@ export default function RoomManagementModal({ isOpen, onClose, rooms }: Props) {
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}></div>
+        <div 
+          className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200" 
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }}
+        ></div>
         
-        <div className="relative bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+        <div className="relative z-50 bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
           {/* Header */}
           <div className="bg-slate-800 px-8 py-6 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3 text-white">
@@ -72,35 +102,77 @@ export default function RoomManagementModal({ isOpen, onClose, rooms }: Props) {
                 <p className="text-xs font-bold text-slate-400 mt-0.5">학교 내 특별실을 추가하거나 삭제할 수 있습니다.</p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-full transition-all text-slate-400 hover:text-white">
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }} 
+              className="relative z-[60] p-2 hover:bg-slate-700 rounded-full transition-all text-slate-400 hover:text-white"
+            >
               <X className="w-6 h-6" />
             </button>
           </div>
 
           <div className="p-8 overflow-y-auto flex-1 bg-slate-50 flex flex-col gap-8 custom-scrollbar">
-            
             {/* Add Section */}
-            <form onSubmit={handleAddRoom} className="space-y-3">
-              <label className="text-sm font-black text-slate-500 ml-1">신규 특별실 등록</label>
-              <div className="flex gap-2">
-                <input 
-                  autoFocus
-                  type="text"
-                  placeholder="예: 컴퓨터실, 과학실, 음악실..."
-                  value={newRoomName}
-                  onChange={(e) => setNewRoomName(e.target.value)}
-                  className="flex-1 px-5 py-3.5 bg-white border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 font-bold text-slate-700 transition-all"
-                />
-                <button 
-                  type="submit"
-                  disabled={!newRoomName.trim() || isAdding}
-                  className="px-6 bg-brand-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-brand-600/20 hover:bg-brand-700 disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none transition-all flex items-center gap-2 active:scale-95"
-                >
-                  {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  등록
-                </button>
-              </div>
-            </form>
+            <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-sm mb-4">
+              {!showAddInput ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-800">신규 특별실 추가</h3>
+                    <p className="text-xs font-bold text-slate-500">목록에 없는 특별실을 새로 등록합니다.</p>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowAddInput(true);
+                    }}
+                    className="relative z-[60] px-8 py-3.5 bg-brand-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-all flex items-center gap-2 active:scale-95"
+                  >
+                    <Plus className="w-5 h-5" />
+                    특별실 추가하기
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleAddRoom} className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-800 mb-1">신규 특별실 이름</h3>
+                    <input 
+                      type="text" 
+                      autoFocus
+                      placeholder="예: 멀티미디어실, 창의공작실..."
+                      value={newRoomName}
+                      onChange={(e) => setNewRoomName(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:ring-2 focus:ring-brand-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setShowAddInput(false);
+                        setNewRoomName('');
+                      }}
+                      className="px-6 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-all"
+                    >
+                      취소
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isAdding || !newRoomName.trim()}
+                      className="px-8 py-2.5 bg-brand-600 text-white rounded-xl font-black shadow-lg shadow-brand-600/20 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2"
+                    >
+                      {isAdding ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                      저장하기
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
@@ -124,9 +196,10 @@ export default function RoomManagementModal({ isOpen, onClose, rooms }: Props) {
                         <span className="font-black text-slate-700">{room.name}</span>
                       </div>
                       <button 
+                        type="button"
                         disabled={!!isDeleting}
-                        onClick={() => setConfirmDelete({ id: room.id, name: room.name })}
-                        className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
+                        onClick={(e) => handleDeleteRoomRequest(e, room.id, room.name)}
+                        className="relative z-[60] p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
                         title="방 삭제"
                       >
                         {isDeleting === room.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
@@ -149,13 +222,13 @@ export default function RoomManagementModal({ isOpen, onClose, rooms }: Props) {
       </div>
 
       <ConfirmModal 
-        isOpen={!!confirmDelete}
-        onClose={() => setConfirmDelete(null)}
-        onConfirm={() => confirmDelete && handleDeleteRoom(confirmDelete.id)}
+        isOpen={confirmDelete.isOpen}
+        onClose={() => setConfirmDelete(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmDelete}
         type="danger"
-        title="특별실 삭제 확인"
-        message={`'${confirmDelete?.name}'을(를) 정말 삭제하시겠습니까? 관련 예약 내역이 모두 사라집니다.`}
-        confirmText="영구 삭제"
+        title="특별실 삭제"
+        message={`정말 '${confirmDelete.roomName}' 특별실을 삭제하시겠습니까? 모든 관련 예약 데이터가 삭제됩니다.`}
+        confirmText="삭제하기"
       />
     </>
   );
