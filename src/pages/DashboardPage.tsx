@@ -647,24 +647,24 @@ export default function DashboardPage() {
             {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 (누구나 수정 가능, 자동 높이) */}
             <div 
               onClick={handleEditNotice}
-              className="bg-yellow-50/80 border-l-4 border-yellow-400 p-3 px-5 flex items-center justify-between shrink-0 group transition-all hover:bg-yellow-100/80 cursor-pointer min-h-[44px] h-auto"
+              className="bg-yellow-50/80 border-l-4 border-yellow-400 p-5 px-8 flex flex-col justify-center shrink-0 group transition-all hover:bg-yellow-100/80 cursor-pointer min-h-[110px] h-auto mb-6 relative"
             >
-              <div className="flex items-center gap-3 overflow-visible w-full">
-                <div className="p-1.5 bg-yellow-200/50 rounded-lg shrink-0 self-start mt-0.5">
-                  <Megaphone className="w-4 h-4 text-yellow-700 animate-bounce-slow" />
+              <div className="flex items-center gap-4 overflow-visible w-full">
+                <div className="p-2 bg-yellow-200/50 rounded-xl shrink-0">
+                  <Megaphone className="w-5 h-5 text-yellow-700 animate-bounce-slow" />
                 </div>
                 {isNoticeLoading ? (
-                  <div className="w-20 h-4 bg-yellow-200/20 animate-pulse rounded"></div>
+                  <div className="w-32 h-5 bg-yellow-200/20 animate-pulse rounded-lg"></div>
                 ) : (
-                  <p className="text-[14px] font-bold text-slate-700 tracking-tight leading-relaxed break-keep whitespace-normal w-full py-0.5 pointer-events-none">
+                  <p className="text-[15.5px] font-black text-slate-800 tracking-tight leading-relaxed break-keep whitespace-normal w-full py-1 pointer-events-none">
                     {dashNotice}
                   </p>
                 )}
               </div>
               
-              <div className="ml-2 shrink-0 self-start mt-1">
-                <div className="p-1.5 hover:bg-yellow-200/50 rounded-lg text-yellow-700 transition-all opacity-40 group-hover:opacity-100">
-                  <Edit2 className="w-3.5 h-3.5" />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                <div className="p-2 hover:bg-yellow-200/50 rounded-xl text-yellow-700 transition-all opacity-30 group-hover:opacity-100">
+                  <Edit2 className="w-4 h-4" />
                 </div>
               </div>
             </div>
