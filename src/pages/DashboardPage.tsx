@@ -783,8 +783,8 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Main Action Area - 패딩 축소 */}
-              <div className="flex-1 p-6 flex flex-col items-center justify-between bg-slate-50/30">
+              {/* Main Action Area - 중앙 정렬 및 간격 최적화 */}
+              <div className="flex-1 p-6 flex flex-col items-center justify-center gap-6 bg-slate-50/30">
                  <div className="text-center space-y-2">
                    <p className="text-slate-500 font-bold text-[13px] leading-tight break-keep whitespace-normal">
                      학교 규정, 학술 자료, 복무 지침 등<br/>
@@ -803,20 +803,11 @@ export default function DashboardPage() {
                   className="w-full relative group"
                 >
                   <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-sky-500 rounded-2xl blur opacity-25 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
-                  <button className="relative w-full bg-gradient-to-r from-blue-700 to-sky-500 hover:from-blue-800 hover:to-sky-600 text-white font-black py-5 px-6 rounded-2xl shadow-lg transition-all transform group-hover:-translate-y-1 active:translate-y-0.5 flex items-center justify-center gap-3">
-                    <span className="text-base tracking-tighter">울릉이에게 무엇이든 물어보세요!</span>
+                  <button className="relative w-full bg-gradient-to-r from-blue-700 to-sky-500 hover:from-blue-800 hover:to-sky-600 text-white font-black py-4 px-6 rounded-2xl shadow-lg transition-all transform group-hover:-translate-y-1 active:translate-y-0.5 flex items-center justify-center gap-3">
+                    <span className="text-sm tracking-tighter">울릉이에게 질문하기</span>
                     <ArrowRightLeft className="w-5 h-5 rotate-45" />
                   </button>
                 </a>
-
-                {/* Safety Disclosure */}
-                <div className="bg-white border border-slate-100 p-4 rounded-xl shadow-sm">
-                  <p className="text-[10px] text-slate-400 font-medium leading-relaxed text-center">
-                    ※ 울릉이는 구글 NotebookLM을 기반으로 작동합니다.<br/>
-                    선생님들의 개별 질문 내용은 관리자도 볼 수 없으며<br/>
-                    안전하게 보호되니 안심하고 이용해 주세요.
-                  </p>
-                </div>
               </div>
             </div>
           </div>
