@@ -93,6 +93,9 @@ export default function DashboardPage() {
   const [todoInput, setTodoInput] = useState('');
   const [dashNotice, setDashNotice] = useState<string>('');
   const [isNoticeLoading, setIsNoticeLoading] = useState(true);
+  const [isNoticeEditModalOpen, setIsNoticeEditModalOpen] = useState(false);
+  const [noticeEditInput, setNoticeEditInput] = useState('');
+  const [isNoticeSaving, setIsNoticeSaving] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   
   // PWA Install Prompt State (초안전 모드 관리)
@@ -291,34 +294,49 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, []);
 
-  const handleEditNotice = async () => {
-    let newNotice = window.prompt("오늘의 한 줄 공지(화이트보드)를 입력하세요 (최대 100자)", dashNotice);
-    if (newNotice !== null) {
-      if (newNotice.length > 100) {
-        alert("공지사항은 최대 100자까지만 입력할 수 있습니다. 100자 이후는 자동으로 삭제됩니다.");
-        newNotice = newNotice.substring(0, 100);
-      }
-      const finalNotice = newNotice.trim() || '오늘의 공지사항이 없습니다.';
-      try {
-        await updateDoc(doc(db, 'settings', 'dashboard_notice'), {
-          text: finalNotice,
-          updatedAt: serverTimestamp(),
-          updatedBy: user?.uid
-        }).catch(async (err) => {
-          // 문서가 없을 경우 생성
-          if (err.code === 'not-found') {
-            await setDoc(doc(db, 'settings', 'dashboard_notice'), {
-              text: finalNotice,
-              updatedAt: serverTimestamp(),
-              updatedBy: user?.uid
-            });
-          } else {
-             throw err;
-          }
-        });
-      } catch (e: any) {
-        alert("공지 수정 실패: " + e.message);
-      }
+  const handleEditNotice = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setNoticeEditInput(dashNotice === '오늘의 공지사항이 없습니다.' ? '' : dashNotice);
+    setIsNoticeEditModalOpen(true);
+  };
+
+  const handleSaveNotice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    let text = noticeEditInput.trim();
+    if (text.length > 100) {
+      alert("공지사항은 최대 100자까지만 입력할 수 있습니다. (현재 " + text.length + "자)");
+      text = text.substring(0, 100);
+    }
+    
+    setIsNoticeSaving(true);
+    const finalNotice = text || '오늘의 공지사항이 없습니다.';
+    
+    try {
+      await updateDoc(doc(db, 'settings', 'dashboard_notice'), {
+        text: finalNotice,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.uid
+      }).catch(async (err) => {
+        if (err.code === 'not-found') {
+          await setDoc(doc(db, 'settings', 'dashboard_notice'), {
+            text: finalNotice,
+            updatedAt: serverTimestamp(),
+            updatedBy: user?.uid
+          });
+        } else {
+          throw err;
+        }
+      });
+      setIsNoticeEditModalOpen(false);
+    } catch (err: any) {
+      alert("공지 저장 실패: " + err.message);
+    } finally {
+      setIsNoticeSaving(false);
     }
   };
 
@@ -656,7 +674,7 @@ export default function DashboardPage() {
                 {isNoticeLoading ? (
                   <div className="w-32 h-5 bg-yellow-200/20 animate-pulse rounded-lg flex-1"></div>
                 ) : (
-                  <p className="text-[15.5px] font-black text-slate-800 tracking-tight leading-relaxed break-all whitespace-normal pointer-events-none flex-1">
+                  <p className="text-[15.5px] font-black text-slate-800 tracking-tight leading-relaxed break-all whitespace-pre-wrap pointer-events-none flex-1">
                     {dashNotice}
                   </p>
                 )}
@@ -1061,6 +1079,77 @@ export default function DashboardPage() {
                 확인했습니다
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* 오늘의 한 줄 공지 편집 모달 (Textarea) */}
+      {isNoticeEditModalOpen && (
+        <div 
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300"
+          onClick={() => setIsNoticeEditModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg border-4 border-yellow-400 overflow-hidden animate-in zoom-in-95 duration-500"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 bg-yellow-400 text-center text-slate-900 border-b border-yellow-500/20">
+              <div className="w-12 h-12 bg-white/30 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <Megaphone className="w-6 h-6 text-slate-900" />
+              </div>
+              <h3 className="text-xl font-black tracking-tight leading-tight">
+                오늘의 한 줄 공지 (화이트보드)
+              </h3>
+              <p className="text-[11px] font-bold text-slate-800/60 uppercase tracking-widest mt-1">
+                EVERYONE CAN EDIT
+              </p>
+            </div>
+            
+            <form onSubmit={handleSaveNotice} className="p-8 space-y-6 bg-yellow-50/30">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">공지 내용 (최대 100자)</label>
+                  <span className={`text-[11px] font-black ${noticeEditInput.length > 100 ? 'text-rose-500' : 'text-slate-400'}`}>
+                    {noticeEditInput.length} / 100
+                  </span>
+                </div>
+                <textarea
+                  autoFocus
+                  value={noticeEditInput}
+                  onChange={(e) => setNoticeEditInput(e.target.value)}
+                  placeholder="모든 선생님과 공유할 공지사항을 입력해 주세요..."
+                  rows={4}
+                  className="w-full p-5 bg-white border-2 border-yellow-100 rounded-2xl text-[15px] font-bold focus:outline-none focus:border-yellow-400 transition-all placeholder:text-slate-300 shadow-inner resize-none min-h-[140px]"
+                />
+                <p className="text-[10px] text-slate-400 font-bold px-1 italic">
+                  ※ 줄바꿈(Enter)이 가능하며, 저장 시 모든 선생님의 화면에 즉시 반영됩니다.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsNoticeEditModalOpen(false); }}
+                  className="flex-1 py-4 bg-white border-2 border-slate-100 text-slate-400 rounded-2xl font-black hover:bg-slate-50 transition-all active:scale-95"
+                >
+                  취소
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isNoticeSaving}
+                  className={`flex-1 py-4 rounded-2xl font-black shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                    isNoticeSaving 
+                      ? 'bg-slate-100 text-slate-300 cursor-not-allowed' 
+                      : 'bg-yellow-400 text-slate-900 shadow-yellow-100 hover:bg-yellow-500'
+                  }`}
+                >
+                  {isNoticeSaving ? (
+                    <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" />
+                  ) : (
+                    '공지 올리기 📢'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
