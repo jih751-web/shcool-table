@@ -112,8 +112,8 @@ export const executeSwapTransaction = async (
       transaction.set(tarSourceOvRef, { teacherId: targetId, teacherName: tarBaseData.teacherName, date: sourceDate, slots: tarSourceSlots });
     }
 
-    // 8. 실시간 연동용 timetable_overrides 기록 (3대 원칙 1번: 쌍방향 반영)
-    // A. 신청자(Requester)의 원본 수업 교체 내역 등록
+    // 8. 실시간 연동용 timetable_overrides 기록 (3대 원칙 1번: 쌍방향 반영 - 과목 보따리 이동)
+    // A. 신청자(A)의 원래 자리(Slot 1) -> 대상자(B)의 정보와 대상자(B)의 과목/반으로 덮어씀
     const reqOvId = `${sourceDate}_${sourcePeriod}_${requesterId}`;
     transaction.set(doc(db, 'timetable_overrides', reqOvId), {
       date: sourceDate,
@@ -121,13 +121,13 @@ export const executeSwapTransaction = async (
       originalTeacherId: requesterId,
       newTeacherId: targetId,
       newTeacherName: tarBaseData.teacherName,
-      subject: mySubject,
-      gradeClass: myGradeClass,
+      subject: targetSubject, // B의 과목
+      gradeClass: targetGradeClass, // B의 반
       type: 'SWAP',
       createdAt: serverTimestamp()
     });
 
-    // B. 대상자(Target)의 원본 수업 교체 내역 등록
+    // B. 대상자(B)의 원래 자리(Slot 3) -> 신청자(A)의 정보와 신청자(A)의 과목/반으로 덮어씀
     const tarOvId = `${targetDate}_${targetPeriod}_${targetId}`;
     transaction.set(doc(db, 'timetable_overrides', tarOvId), {
       date: targetDate,
@@ -135,8 +135,8 @@ export const executeSwapTransaction = async (
       originalTeacherId: targetId,
       newTeacherId: requesterId,
       newTeacherName: reqBaseData.teacherName,
-      subject: targetSubject,
-      gradeClass: targetGradeClass,
+      subject: mySubject, // A의 과목
+      gradeClass: myGradeClass, // A의 반
       type: 'SWAP',
       createdAt: serverTimestamp()
     });
@@ -229,7 +229,8 @@ export const executeMakeupTransaction = async (
     transaction.set(reqOvRef, { teacherId: requesterId, teacherName: reqBaseData.teacherName, date, slots: reqSlots });
     transaction.set(tarOvRef, { teacherId: targetId, teacherName: tarBaseData.teacherName, date, slots: tarSlots });
 
-    // 6. 실시간 연동용 timetable_overrides 기록 (3대 원칙 1번: 보강 반영)
+    // 6. 실시간 연동용 timetable_overrides 기록 (3대 원칙 1번: 보강 반영 - 과목 보따리 이동)
+    // 결강자(A)의 원래 자리(Slot 1) -> 보강자(B)의 정보와 보강자(B)의 과목/반으로 덮어씀
     const makeupOvId = `${date}_${period}_${requesterId}`;
     transaction.set(doc(db, 'timetable_overrides', makeupOvId), {
       date,
@@ -237,8 +238,8 @@ export const executeMakeupTransaction = async (
       originalTeacherId: requesterId,
       newTeacherId: targetId,
       newTeacherName: tarBaseData.teacherName,
-      subject: subject,
-      gradeClass: gradeClass,
+      subject: targetSubject, // 보강자(B)의 원본 과목
+      gradeClass: targetGradeClass, // 보강자(B)의 원본 반
       type: 'MAKEUP',
       createdAt: serverTimestamp()
     });

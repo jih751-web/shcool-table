@@ -326,11 +326,11 @@ const GlobalTimetablePage: React.FC = () => {
                               >
                                 {hasMergedClass ? (
                                   <div className="flex flex-col items-center justify-center w-full h-full px-0.5 leading-[1.2]">
-                                    <div className={`font-bold text-[11px] truncate w-full ${isSelected ? 'text-blue-800' : (displaySlot.subject.includes('(보강)') ? 'text-orange-600' : displaySlot.subject.includes('(대강)') ? 'text-brand-600' : (displaySlot.subject === '역사' || displaySlot.subject === '도덕' || displaySlot.subject === '체육' ? 'text-blue-600' : displaySlot.subject === '과학' || displaySlot.subject === '기술가정' ? 'text-red-600' : 'text-slate-800'))}`}>
-                                      {displaySlot.subject.replace(' (보강)', '').replace(' (대강)', '')}
-                                      {displaySlot.subject.includes('(보강)') && <span className="block text-[8px] leading-tight text-white bg-orange-500 rounded mt-0.5 px-1 font-black">보강</span>}
-                                      {displaySlot.subject.includes('(대강)') && <span className="block text-[8px] leading-tight text-white bg-brand-600 rounded mt-0.5 px-1 font-black">대강</span>}
-                                    </div>
+                                      <div className={`font-bold text-[11px] truncate w-full ${isSelected ? 'text-blue-800' : (displaySlot.subject.includes('(보강)') ? 'text-orange-600' : displaySlot.subject.includes('(대강)') ? 'text-brand-600' : (displaySlot.subject === '역사' || displaySlot.subject === '도덕' || displaySlot.subject === '체육' ? 'text-blue-600' : displaySlot.subject === '과학' || displaySlot.subject === '기술가정' ? 'text-red-600' : 'text-slate-800'))}`}>
+                                        {displaySlot.subject.replace(' (보강)', '').replace(' (대강)', '')}
+                                        {displaySlot.subject.includes('(보강)') && <span className="block text-[8px] leading-tight text-white bg-orange-500 rounded mt-0.5 px-1 font-black">보강:{userProfiles[t.id]?.nickname || t.teacherName}</span>}
+                                        {displaySlot.subject.includes('(대강)') && <span className="block text-[8px] leading-tight text-white bg-brand-600 rounded mt-0.5 px-1 font-black">대강:{userProfiles[t.id]?.nickname || t.teacherName}</span>}
+                                      </div>
                                     <div className="text-[10px] font-medium text-slate-600 truncate w-full mt-[1px]">
                                       {displaySlot.gradeClass}
                                     </div>

@@ -680,19 +680,25 @@ export default function DashboardPage() {
                            <div className="flex-1 flex items-center justify-between min-w-0">
                              <h3 className={`text-base font-black tracking-tight flex items-center gap-1.5 truncate ${slot.subject.includes('(보강)') || slot.subject.includes('(대강)') ? 'text-brand-700' : 'text-slate-800'}`}>
                                 <BookOpen className="w-4 h-4 text-brand-500 shrink-0" />
-                                {slot.subject.includes('(보강)') ? (
-                                  <span className="flex items-center gap-1">
-                                    {slot.subject.replace(' (보강)', '')}
-                                    <span className="text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded-md shadow-sm ml-1 font-black">보강</span>
-                                  </span>
-                                ) : slot.subject.includes('(대강)') ? (
-                                  <span className="flex items-center gap-1">
-                                    {slot.subject.replace(' (대강)', '')}
-                                    <span className="text-[10px] bg-brand-600 text-white px-1.5 py-0.5 rounded-md shadow-sm ml-1 font-black">대강</span>
-                                  </span>
-                                ) : (
-                                  slot.subject
-                                )}
+                                 {slot.subject.includes('(보강)') ? (
+                                   <div className="flex flex-col">
+                                     <span className="flex items-center gap-1">
+                                       {slot.subject.replace(' (보강)', '')}
+                                       <span className="text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded-md shadow-sm ml-1 font-black">보강</span>
+                                     </span>
+                                     <span className="text-[10px] text-slate-400 font-bold mt-0.5">담당: {userData?.nickname || user?.displayName}</span>
+                                   </div>
+                                 ) : slot.subject.includes('(대강)') ? (
+                                   <div className="flex flex-col">
+                                     <span className="flex items-center gap-1">
+                                       {slot.subject.replace(' (대강)', '')}
+                                       <span className="text-[10px] bg-brand-600 text-white px-1.5 py-0.5 rounded-md shadow-sm ml-1 font-black">대강</span>
+                                     </span>
+                                     <span className="text-[10px] text-slate-400 font-bold mt-0.5">담당: {userData?.nickname || user?.displayName}</span>
+                                   </div>
+                                 ) : (
+                                   slot.subject
+                                 )}
                              </h3>
                              <p className="text-slate-500 font-bold text-xs truncate ml-2">{slot.gradeClass}</p>
                            </div>
