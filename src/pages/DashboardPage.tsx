@@ -370,8 +370,7 @@ export default function DashboardPage() {
       currentSlots = JSON.parse(JSON.stringify(overrideData.slots));
     }
 
-    // 3. 신규 실시간 변동 내역(timetable_overrides) 병합 (Phase 13)
-    // 이 날짜의 모든 변동 내역 중 나(user.uid)와 관련된 것들을 찾아 덮어씀
+    // 3. 신규 실시간 변동 내역(timetable_overrides) 병합 (3대 원칙 1번: 쌍방향 반영)
     if (timetableOverrides.length > 0 && user) {
       timetableOverrides.forEach(ov => {
         // A. 내가 원래 들어가야 할 수업이 다른 교사로 바뀌었거나 사라진 경우 (공강 처리)
@@ -382,14 +381,12 @@ export default function DashboardPage() {
             slot.gradeClass = '';
           }
         }
-        // B. 내가 다른 사람의 수업을 대신 들어가거나(MAKEUP), 내 수업이 이 시간으로 옮겨온 경우(SWAP)
+        // B. 내가 다른 사람의 수업을 대신 들어가거나(MAKEUP), 내 수업이 이 시간으로 교체되어 들어온 경우(SWAP)
         if (ov.newTeacherId === user.uid) {
           const slot = currentSlots.find(s => s.period === ov.period);
           if (slot) {
             slot.subject = ov.subject;
             slot.gradeClass = ov.gradeClass;
-            // 렌더링 시 구분을 위해 임시 태그/속성 부여 (타입 정의는 subject에 포함하거나 별도 처리)
-            // 여기서는 subject 뒤에 태그를 붙임
             const tag = ov.type === 'MAKEUP' ? ' (보강)' : ' (대강)';
             if (!slot.subject.includes(tag)) {
                slot.subject += tag;
@@ -686,12 +683,12 @@ export default function DashboardPage() {
                                 {slot.subject.includes('(보강)') ? (
                                   <span className="flex items-center gap-1">
                                     {slot.subject.replace(' (보강)', '')}
-                                    <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">보강</span>
+                                    <span className="text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded-md shadow-sm ml-1 font-black">보강</span>
                                   </span>
                                 ) : slot.subject.includes('(대강)') ? (
                                   <span className="flex items-center gap-1">
                                     {slot.subject.replace(' (대강)', '')}
-                                    <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md">대강</span>
+                                    <span className="text-[10px] bg-brand-600 text-white px-1.5 py-0.5 rounded-md shadow-sm ml-1 font-black">대강</span>
                                   </span>
                                 ) : (
                                   slot.subject

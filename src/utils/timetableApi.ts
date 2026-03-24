@@ -112,11 +112,10 @@ export const executeSwapTransaction = async (
       transaction.set(tarSourceOvRef, { teacherId: targetId, teacherName: tarBaseData.teacherName, date: sourceDate, slots: tarSourceSlots });
     }
 
-    // 8. 실시간 연동용 timetable_overrides 기록
-    // A. 내 원본 수업의 교체 내역 (나 -> 상대방)
+    // 8. 실시간 연동용 timetable_overrides 기록 (3대 원칙 1번: 쌍방향 반영)
+    // A. 신청자(Requester)의 원본 수업 교체 내역 등록
     const reqOvId = `${sourceDate}_${sourcePeriod}_${requesterId}`;
-    const reqOvRef = doc(db, 'timetable_overrides', reqOvId);
-    transaction.set(reqOvRef, {
+    transaction.set(doc(db, 'timetable_overrides', reqOvId), {
       date: sourceDate,
       period: sourcePeriod,
       originalTeacherId: requesterId,
@@ -128,10 +127,9 @@ export const executeSwapTransaction = async (
       createdAt: serverTimestamp()
     });
 
-    // B. 상대방 원본 수업의 교체 내역 (상대방 -> 나)
+    // B. 대상자(Target)의 원본 수업 교체 내역 등록
     const tarOvId = `${targetDate}_${targetPeriod}_${targetId}`;
-    const tarOvRef = doc(db, 'timetable_overrides', tarOvId);
-    transaction.set(tarOvRef, {
+    transaction.set(doc(db, 'timetable_overrides', tarOvId), {
       date: targetDate,
       period: targetPeriod,
       originalTeacherId: targetId,
@@ -231,10 +229,9 @@ export const executeMakeupTransaction = async (
     transaction.set(reqOvRef, { teacherId: requesterId, teacherName: reqBaseData.teacherName, date, slots: reqSlots });
     transaction.set(tarOvRef, { teacherId: targetId, teacherName: tarBaseData.teacherName, date, slots: tarSlots });
 
-    // 6. 실시간 연동용 timetable_overrides 기록
+    // 6. 실시간 연동용 timetable_overrides 기록 (3대 원칙 1번: 보강 반영)
     const makeupOvId = `${date}_${period}_${requesterId}`;
-    const makeupOvRef = doc(db, 'timetable_overrides', makeupOvId);
-    transaction.set(makeupOvRef, {
+    transaction.set(doc(db, 'timetable_overrides', makeupOvId), {
       date,
       period,
       originalTeacherId: requesterId,
@@ -361,10 +358,7 @@ export const executeRollbackTransaction = async (recordId: string) => {
       }
     }
 
-    // 3. Delete the Record
-    transaction.delete(recordRef);
-
-    // 4. Delete associated timetable_overrides
+    // 4. 관련 timetable_overrides 문서 완전 삭제 (3대 원칙 3번: 원상 복구)
     const reqOvId = `${sourceDate}_${sourcePeriod}_${requestorId}`;
     transaction.delete(doc(db, 'timetable_overrides', reqOvId));
     
@@ -372,6 +366,9 @@ export const executeRollbackTransaction = async (recordId: string) => {
        const tarOvId = `${targetDate}_${targetPeriod}_${targetId}`;
        transaction.delete(doc(db, 'timetable_overrides', tarOvId));
     }
+    
+    // 5. Delete the Record
+    transaction.delete(recordRef);
   });
 };
 

@@ -281,20 +281,20 @@ const GlobalTimetablePage: React.FC = () => {
                             const isSelected = selection?.teacherId === t.id && selection?.dayOfWeek === day && selection?.period === period;
                             let cellBg = 'bg-white';
                             
-                            // 실시간 변동 내역 병합 (Phase 13)
+                            // 실시간 변동 내역 병합 (3대 원칙 2, 3번: 전체 현황 연동 및 복구)
                             let displaySlot = slot ? { ...slot } : { period, subject: '', gradeClass: '' };
                             const dateOfCell = format(addDays(weekStartsOn, DAYS.indexOf(day)), 'yyyy-MM-dd');
                             
                             const cellOverrides = timetableOverrides.filter(ov => ov.date === dateOfCell && ov.period === period);
                             
-                            // A. 이 교사의 원래 수업이 나갔거나 바뀐 경우
+                            // A. 이 교사의 원래 수업이 나갔거나 바뀐 경우 (원상 복구 시 ov가 삭제되므로 자연스럽게 복구됨)
                             const myOutOv = cellOverrides.find(ov => ov.originalTeacherId === t.id);
                             if (myOutOv) {
                                displaySlot.subject = '';
                                displaySlot.gradeClass = '';
                             }
                             
-                            // B. 이 교사가 다른 수업을 들어온 연우
+                            // B. 이 교사가 다른 수업을 들어온 연우 (또는 자신의 수업이 이 시간으로 교체된 경우)
                             const myInOv = cellOverrides.find(ov => ov.newTeacherId === t.id);
                             if (myInOv) {
                                displaySlot.subject = myInOv.subject + (myInOv.type === 'MAKEUP' ? ' (보강)' : ' (대강)');
@@ -328,8 +328,8 @@ const GlobalTimetablePage: React.FC = () => {
                                   <div className="flex flex-col items-center justify-center w-full h-full px-0.5 leading-[1.2]">
                                     <div className={`font-bold text-[11px] truncate w-full ${isSelected ? 'text-blue-800' : (displaySlot.subject.includes('(보강)') ? 'text-orange-600' : displaySlot.subject.includes('(대강)') ? 'text-brand-600' : (displaySlot.subject === '역사' || displaySlot.subject === '도덕' || displaySlot.subject === '체육' ? 'text-blue-600' : displaySlot.subject === '과학' || displaySlot.subject === '기술가정' ? 'text-red-600' : 'text-slate-800'))}`}>
                                       {displaySlot.subject.replace(' (보강)', '').replace(' (대강)', '')}
-                                      {displaySlot.subject.includes('(보강)') && <span className="block text-[8px] leading-tight text-orange-500 bg-orange-50/50 rounded mt-0.5">보강</span>}
-                                      {displaySlot.subject.includes('(대강)') && <span className="block text-[8px] leading-tight text-brand-500 bg-brand-50/50 rounded mt-0.5">대강</span>}
+                                      {displaySlot.subject.includes('(보강)') && <span className="block text-[8px] leading-tight text-white bg-orange-500 rounded mt-0.5 px-1 font-black">보강</span>}
+                                      {displaySlot.subject.includes('(대강)') && <span className="block text-[8px] leading-tight text-white bg-brand-600 rounded mt-0.5 px-1 font-black">대강</span>}
                                     </div>
                                     <div className="text-[10px] font-medium text-slate-600 truncate w-full mt-[1px]">
                                       {displaySlot.gradeClass}
