@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share, Megaphone, Edit2 } from 'lucide-react';
+import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share, Megaphone, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
 import type { Timetable, ClassSlot, Override, SchoolEvent, Todo, TimetableOverride } from '../types';
@@ -96,6 +96,7 @@ export default function DashboardPage() {
   const [isNoticeEditModalOpen, setIsNoticeEditModalOpen] = useState(false);
   const [noticeEditInput, setNoticeEditInput] = useState('');
   const [isNoticeSaving, setIsNoticeSaving] = useState(false);
+  const [isNoticeExpanded, setIsNoticeExpanded] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   
   // PWA Install Prompt State (초안전 모드 관리)
@@ -662,29 +663,61 @@ export default function DashboardPage() {
           {/* Column 2: Timeline & To-Do List */}
           <div className="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col relative min-h-[500px]">
             
-            {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 (누구나 수정 가능, 자동 높이, 겹침 방지) */}
+            {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 (아코디언 접기/펼치기 지원) */}
             <div 
-              onClick={handleEditNotice}
-              className="bg-yellow-50/80 border-l-4 border-yellow-400 p-5 px-6 flex items-center justify-between shrink-0 group transition-all hover:bg-yellow-100/80 cursor-pointer min-h-[110px] h-auto mb-6 shadow-sm"
+              className={`bg-yellow-50/80 border-l-4 border-yellow-400 shrink-0 group transition-all hover:bg-yellow-100/80 shadow-sm mb-6 flex flex-col relative ${isNoticeExpanded ? 'min-h-[110px] h-auto p-5' : 'min-h-[60px] h-[60px] p-0 justify-center'}`}
             >
-              <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
-                <div className="p-2 bg-yellow-200/50 rounded-xl shrink-0 self-center">
-                  <Megaphone className="w-5 h-5 text-yellow-700 animate-bounce-slow" />
+              {/* Header / Clickable Area to Toggle */}
+              <div 
+                onClick={() => setIsNoticeExpanded(!isNoticeExpanded)}
+                className={`flex items-center justify-between cursor-pointer select-none w-full h-full ${!isNoticeExpanded ? 'px-6' : 'px-1'}`}
+              >
+                <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
+                  <div className={`p-2 bg-yellow-200/50 rounded-xl shrink-0 ${!isNoticeExpanded ? 'self-center' : 'self-start'}`}>
+                    <Megaphone className="w-5 h-5 text-yellow-700 animate-bounce-slow" />
+                  </div>
+                  
+                  {!isNoticeExpanded && (
+                    isNoticeLoading ? (
+                      <div className="w-24 h-4 bg-yellow-200/50 animate-pulse rounded-lg flex-1"></div>
+                    ) : (
+                      <p className="text-[15.5px] font-black text-slate-800 truncate flex-1 pointer-events-none">
+                        {dashNotice}
+                      </p>
+                    )
+                  )}
+                  {isNoticeExpanded && (
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-black text-yellow-700 uppercase tracking-widest leading-none">
+                        Today's Whiteboard
+                      </span>
+                      <span className="text-[10px] font-bold text-yellow-600/60 mt-0.5">상단 영역을 누르면 다시 접힙니다</span>
+                    </div>
+                  )}
                 </div>
-                {isNoticeLoading ? (
-                  <div className="w-32 h-5 bg-yellow-200/20 animate-pulse rounded-lg flex-1"></div>
-                ) : (
-                  <p className="text-[15.5px] font-black text-slate-800 tracking-tight leading-relaxed break-all whitespace-pre-wrap pointer-events-none flex-1">
-                    {dashNotice}
-                  </p>
-                )}
+                
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button 
+                    onClick={handleEditNotice}
+                    className="p-2 hover:bg-yellow-200/50 rounded-xl text-yellow-700 transition-all opacity-30 group-hover:opacity-100"
+                    title="공지 수정"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <div className="p-2 text-yellow-700/50 group-hover:text-yellow-700">
+                    {isNoticeExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </div>
+                </div>
               </div>
               
-              <div className="shrink-0 self-center">
-                <div className="p-2 hover:bg-yellow-200/50 rounded-xl text-yellow-700 transition-all opacity-30 group-hover:opacity-100">
-                  <Edit2 className="w-4 h-4" />
+              {/* Expanded Content Area */}
+              {isNoticeExpanded && (
+                <div className="mt-4 px-1 border-t border-yellow-200/50 pt-4 animate-in slide-in-from-top-2 duration-300">
+                  <p className="text-[15.5px] font-black text-slate-800 tracking-tight leading-relaxed break-all whitespace-pre-wrap">
+                    {dashNotice}
+                  </p>
                 </div>
-              </div>
+              )}
             </div>
             {/* Date Navigation Bar */}
             <div className="bg-brand-50 border-b border-brand-100 p-4 pb-3 flex flex-col items-center gap-3">
