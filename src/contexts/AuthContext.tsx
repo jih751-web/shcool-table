@@ -12,7 +12,7 @@ interface AuthContextType {
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
-  updateNickname: (nickname: string) => Promise<void>;
+  updateProfile: (profile: { nickname?: string; birthDate?: string }) => Promise<void>;
   isLoggingIn: boolean;
 }
 
@@ -122,42 +122,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateNickname = async (nickname: string) => {
+  const updateProfile = async (profile: { nickname?: string; birthDate?: string }) => {
     if (!user) return;
     try {
       const batch = writeBatch(db);
       const userRef = doc(db, 'users', user.uid);
       const timetableRef = doc(db, 'timetables', user.uid);
 
-      // 1. users 컬렉션 업데이트 (nickname 필드와 name 필드 모두 동기화)
-      batch.set(userRef, {
-        nickname: nickname,
-        name: nickname, // 앱 전체에서 name 필드를 주로 사용하므로 함께 업데이트
-        uid: user.uid,
-        email: user.email || ''
-      }, { merge: true });
+      // 1. users 컬렉션 업데이트
+      const updateData: any = { ...profile };
+      if (profile.nickname) {
+        updateData.name = profile.nickname; // 앱 전반의 name 호환성 유지
+      }
+      
+      batch.set(userRef, updateData, { merge: true });
 
-      // 2. timetables 컬렉션 업데이트 (존재할 경우에만)
-      const ttSnap = await getDoc(timetableRef);
-      if (ttSnap.exists()) {
-        batch.update(timetableRef, { 
-          name: nickname 
-        });
+      // 2. timetables 컬렉션 업데이트 (닉네임 변경 시에만)
+      if (profile.nickname) {
+        const ttSnap = await getDoc(timetableRef);
+        if (ttSnap.exists()) {
+          batch.update(timetableRef, { 
+            name: profile.nickname 
+          });
+        }
       }
 
-      // 3. (추가) overrides 등 다른 컬렉션에 이름이 저장된 경우에도 업데이트 권장
-      // 여기서는 일단 가장 핵심인 users와 timetables를 확실히 처리합니다.
-
       await batch.commit();
-      console.log("Nickname and related data updated successfully");
+      console.log("Profile updated successfully");
     } catch (error) {
-      console.error("Update nickname failed:", error);
+      console.error("Update profile failed:", error);
       throw error;
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, userData, userProfiles, loading, signInWithGoogle, logout, updateNickname, isLoggingIn }}>
+    <AuthContext.Provider value={{ user, userData, userProfiles, loading, signInWithGoogle, logout, updateProfile, isLoggingIn }}>
       {!loading && children}
     </AuthContext.Provider>
   );

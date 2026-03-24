@@ -8,6 +8,7 @@ import type { Timetable, ClassSlot, Override, SchoolEvent, Todo, TimetableOverri
 import SmartReplacementModal from '../components/SmartReplacementModal';
 import { addDays, subDays, format, isToday } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import FortuneWidget from '../components/FortuneWidget';
 import NicknameModal from '../components/NicknameModal';
 import { healingQuotes } from '../data/healingQuotes';
 
@@ -582,6 +583,11 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
               </div>
+            </div>
+
+            {/* 오늘의 운세 Widget */}
+            <div className="flex-1 min-h-[300px]">
+              <FortuneWidget />
             </div>
           </div>
 

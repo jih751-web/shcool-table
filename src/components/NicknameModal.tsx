@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, CheckCircle2 } from 'lucide-react';
+import { X, User, CheckCircle2, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
@@ -8,14 +8,16 @@ interface Props {
 }
 
 export default function NicknameModal({ isOpen, onClose }: Props) {
-  const { userData, updateNickname } = useAuth();
+  const { userData, updateProfile } = useAuth();
   const [nickname, setNickname] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     if (isOpen && userData) {
       setNickname(userData.nickname || '');
+      setBirthDate(userData.birthDate || '');
     }
   }, [isOpen, userData]);
 
@@ -25,16 +27,25 @@ export default function NicknameModal({ isOpen, onClose }: Props) {
     e.preventDefault();
     if (!nickname.trim()) return;
 
+    // 생년월일 형식 체크 (선택 사항이지만 입력 시 8자리 숫자 권장)
+    if (birthDate && !/^\d{8}$/.test(birthDate)) {
+      alert('생년월일은 YYYYMMDD 형식(8자리 숫자)으로 입력해 주세요.');
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await updateNickname(nickname.trim());
+      await updateProfile({ 
+        nickname: nickname.trim(), 
+        birthDate: birthDate.trim() 
+      });
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
         onClose();
       }, 1500);
     } catch (error) {
-      alert('닉네임 저장에 실패했습니다.');
+      alert('설정 저장에 실패했습니다.');
     } finally {
       setIsSaving(false);
     }
@@ -54,23 +65,42 @@ export default function NicknameModal({ isOpen, onClose }: Props) {
         </div>
         
         <form onSubmit={handleSave} className="p-6 space-y-6">
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">활동 이름 (닉네임)</label>
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">활동 이름 (닉네임)</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
+                </div>
+                <input 
+                  type="text" 
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="사용할 닉네임을 입력하세요"
+                  className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-bold placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all"
+                  maxLength={12}
+                  required
+                />
               </div>
-              <input 
-                type="text" 
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="사용할 닉네임을 입력하세요"
-                className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-bold placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all"
-                maxLength={12}
-                required
-              />
             </div>
-            <p className="text-[10px] text-slate-400 font-bold px-1 italic">* 최대 12자까지 입력 가능합니다.</p>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">생년월일 (운세용)</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Calendar className="h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
+                </div>
+                <input 
+                  type="text" 
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="예: 19850515"
+                  className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-bold placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all"
+                  maxLength={8}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 font-bold px-1 italic">* YYYYMMDD 형식으로 8자리 숫자를 입력해 주세요.</p>
+            </div>
           </div>
 
           <div className="pt-2">
@@ -96,7 +126,7 @@ export default function NicknameModal({ isOpen, onClose }: Props) {
                   저장 완료
                 </>
               ) : (
-                '닉네임 저장하기'
+                '설정 저장하기'
               )}
             </button>
           </div>

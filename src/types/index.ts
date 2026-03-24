@@ -3,6 +3,7 @@ export interface Teacher {
   name: string;
   email: string;
   nickname?: string;
+  birthDate?: string; // YYYYMMDD
   isBlocked?: boolean;
   isAdmin?: boolean;
 }
