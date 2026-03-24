@@ -723,8 +723,8 @@ export default function DashboardPage() {
 
           {/* Column 3: Assistant Panel */}
           <div className="flex flex-col gap-6 sticky lg:top-24">
-            {/* To-Do List (Moved from Column 2) */}
-            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[300px]">
+            {/* To-Do List (나만의 업무 수첩) - 높이 확장 (500px) */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[500px]">
                <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0">
                  <div className="flex items-center gap-2">
                    <CheckCircle2 className="w-5 h-5 text-brand-600" />
@@ -766,23 +766,25 @@ export default function DashboardPage() {
                </div>
             </div>
 
-            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[480px] group/card transition-all hover:shadow-2xl">
+            {/* 울릉이 (지능형 업무 비서) - 높이 축소 (350px) */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-[350px] group/card transition-all hover:shadow-2xl">
               {/* Card Header (Sea Theme) */}
-              <div className="bg-gradient-to-br from-blue-600 to-sky-400 p-8 flex flex-col items-center justify-center text-center gap-4 shrink-0 relative overflow-hidden">
+              {/* Card Header (Sea Theme) - 패딩 축소 */}
+              <div className="bg-gradient-to-br from-blue-600 to-sky-400 p-6 flex flex-col items-center justify-center text-center gap-3 shrink-0 relative overflow-hidden">
                 <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-                <div className="relative z-10 p-4 bg-white/20 backdrop-blur-md text-white rounded-2xl shadow-xl border border-white/30 animate-bounce-slow">
-                  <Bot className="w-10 h-10" />
+                <div className="relative z-10 p-3 bg-white/20 backdrop-blur-md text-white rounded-2xl shadow-xl border border-white/30 animate-bounce-slow">
+                  <Bot className="w-8 h-8" />
                 </div>
                 <div className="relative z-10">
-                  <h3 className="text-2xl font-black text-white tracking-tight drop-shadow-md">
+                  <h3 className="text-xl font-black text-white tracking-tight drop-shadow-md">
                     지능형 업무 비서 <span className="text-yellow-200">울릉이</span>
                   </h3>
-                  <p className="text-blue-50 text-xs font-bold mt-1 opacity-90 uppercase tracking-[0.2em]">Powered by NotebookLM</p>
+                  <p className="text-blue-50 text-[10px] font-bold mt-1 opacity-90 uppercase tracking-[0.2em]">Powered by NotebookLM</p>
                 </div>
               </div>
 
-              {/* Main Action Area */}
-              <div className="flex-1 p-8 flex flex-col items-center justify-between bg-slate-50/30">
+              {/* Main Action Area - 패딩 축소 */}
+              <div className="flex-1 p-6 flex flex-col items-center justify-between bg-slate-50/30">
                 <div className="text-center space-y-3">
                   <p className="text-slate-500 font-bold text-sm leading-relaxed">
                     학교 규정, 학술 자료, 복무 지침 등<br/>
