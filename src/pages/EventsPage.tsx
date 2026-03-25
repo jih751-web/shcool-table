@@ -210,52 +210,63 @@ const EventsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 인쇄 전용 테이블 (평소에는 숨김) */}
-        <div className="hidden print:block mb-8">
-          <style>{`
-            @media print {
-              .no-print { display: none !important; }
-              body { background: white !important; }
-              @page { margin: 2cm; size: A4 landscape; }
-              .print-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-family: sans-serif; }
-              .print-table th, .print-table td { border: 1px solid #ddd; padding: 12px 10px; text-align: left; font-size: 11px; }
-              .print-table th { background-color: #f8f9fa !important; font-weight: bold; color: #333; }
-              .print-title { font-size: 24px; font-weight: bold; margin-bottom: 5px; text-align: center; }
-              .print-subtitle { font-size: 14px; color: #666; margin-bottom: 20px; text-align: center; }
+        {/* 인쇄 전용 스타일 (A4 가로 꽉 차게) */}
+        <style>{`
+          @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; margin: 0 !important; padding: 0 !important; }
+            main { max-width: none !important; margin: 0 !important; padding: 1.5cm !important; width: 100% !important; }
+            .print-calendar-container { 
+              border: 2px solid #333 !important; 
+              border-radius: 0 !important; 
+              box-shadow: none !important;
+              width: 100% !important;
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
             }
-          `}</style>
-          <div className="print-title">[{currentMonthStr}] 학사 일정</div>
-          <div className="print-subtitle">울릉도 스마트 교무실 시스템 공식 일정부</div>
-          <table className="print-table">
-            <thead>
-              <tr>
-                <th style={{ width: '12%' }}>날짜(시작)</th>
-                <th style={{ width: '12%' }}>날짜(종료)</th>
-                <th style={{ width: '15%' }}>시간/교시</th>
-                <th style={{ width: '10%' }}>본인/공용</th>
-                <th style={{ width: '25%' }}>행사명</th>
-                <th style={{ width: '26%' }}>전달사항 (메모)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {monthEvents.map(e => (
-                <tr key={e.id}>
-                  <td>{e.startDate || e.date}</td>
-                  <td>{e.endDate || e.startDate || e.date}</td>
-                  <td>{e.isAllDay ? '하루 종일' : `${e.periodStart}교시 ~ ${e.periodEnd}교시`}</td>
-                  <td>{e.type === 'EXTERNAL' ? '외부 행사' : '교과 연계'}</td>
-                  <td style={{ fontWeight: 'bold' }}>{e.description}</td>
-                  <td style={{ whiteSpace: 'pre-wrap' }}>{e.announcement || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            .grid-cols-7 { border-collapse: collapse !important; }
+            .calendar-day-cell { 
+              min-height: 120px !important; 
+              border: 0.5px solid #eee !important;
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
+            }
+            .calendar-event-tag {
+              border-width: 1px !important;
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
+            }
+            @page { 
+              size: A4 landscape; 
+              margin: 0;
+            }
+            .print-header { 
+              display: block !important; 
+              text-align: center; 
+              margin-bottom: 20px;
+            }
+            .print-header h1 { font-size: 28px; font-weight: 900; color: #1e293b; }
+          }
+          .print-header { display: none; }
+        `}</style>
+
+        <div className="print-header">
+          <h1>[{currentMonthStr}] 학사 일정</h1>
+          <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginTop: '4px' }}>울릉도 스마트 교무실 시스템 공식 일정부</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden no-print">
-          <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print-calendar-container">
+          <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200 no-print">
             {daysOfWeek.map((day, i) => (
               <div key={day} className={`py-4 text-center text-sm font-bold tracking-tight ${i === 0 ? 'text-rose-500' : i === 6 ? 'text-blue-600' : 'text-slate-600'}`}>
+                {day}
+              </div>
+            ))}
+          </div>
+          {/* 인쇄 시에만 보이는 요일 헤더 */}
+          <div className="hidden print:grid grid-cols-7 bg-slate-100 border-b-2 border-slate-300">
+            {daysOfWeek.map((day, i) => (
+              <div key={day} className={`py-3 text-center text-xs font-black tracking-widest ${i === 0 ? 'text-rose-600' : i === 6 ? 'text-blue-700' : 'text-slate-700'}`}>
                 {day}
               </div>
             ))}
@@ -276,7 +287,7 @@ const EventsPage: React.FC = () => {
                 <div 
                   key={day.toISOString()}
                   onClick={() => openDateModal(day)}
-                  className={`min-h-[140px] bg-white p-2.5 transition-colors cursor-pointer hover:bg-brand-50/40 relative group ${!isCurrentMonth ? 'text-slate-400 bg-slate-50/50' : 'text-slate-700'}`}
+                  className={`min-h-[140px] bg-white p-2.5 transition-colors cursor-pointer hover:bg-brand-50/40 relative group calendar-day-cell ${!isCurrentMonth ? 'text-slate-400 bg-slate-50/50' : 'text-slate-700'}`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <span 
@@ -293,10 +304,10 @@ const EventsPage: React.FC = () => {
                   
                   <div className="space-y-1.5">
                     {dayEvents.map(e => (
-                      <div key={e.id} className={`text-[11px] px-2 py-1 rounded truncate border font-bold shadow-sm ${
+                      <div key={e.id} className={`text-[11px] px-2 py-1 rounded truncate border font-bold shadow-sm calendar-event-tag ${
                         e.type === 'EXTERNAL' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'
                       }`} title={e.description}>
-                        {e.periodStart}-{e.periodEnd}교시 {e.description}
+                        {e.periodStart}-{e.periodEnd} {e.description}
                       </div>
                     ))}
                   </div>
