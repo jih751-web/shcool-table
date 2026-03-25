@@ -7,6 +7,8 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, format, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import ConfirmModal from '../components/ConfirmModal';
+import * as XLSX from 'xlsx';
+import { Download, Printer } from 'lucide-react';
 
 const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -102,12 +104,61 @@ const EventsPage: React.FC = () => {
   }).sort((a, b) => a.periodStart - b.periodStart);
   
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
+
+  const currentMonthStr = format(currentMonth, 'yyyy. MM');
+  const monthEvents = events.filter(e => {
+    const eventDate = e.startDate || e.date;
+    return eventDate >= format(monthStart, 'yyyy-MM-dd') && eventDate <= format(monthEnd, 'yyyy-MM-dd');
+  }).sort((a, b) => {
+    const aDate = a.startDate || a.date;
+    const bDate = b.startDate || b.date;
+    return aDate.localeCompare(bDate) || a.periodStart - b.periodStart;
+  });
+
+  const handleDownloadExcel = () => {
+    if (monthEvents.length === 0) {
+      alert("이번 달에 등록된 학사 일정이 없습니다.");
+      return;
+    }
+
+    const excelData = monthEvents.map(e => ({
+      '날짜 (시작)': e.startDate || e.date,
+      '날짜 (종료)': e.endDate || e.startDate || e.date,
+      '시간/교시': e.isAllDay ? '하루 종일' : `${e.periodStart}교시 ~ ${e.periodEnd}교시`,
+      '행사 유형': e.type === 'EXTERNAL' ? '외부 행사' : '교과 연계',
+      '행사명': e.description,
+      '전달사항': e.announcement || '-'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "학사일정");
+    
+    // 컬럼 너비 설정
+    const wscols = [
+      {wch: 15}, {wch: 15}, {wch: 20}, {wch: 15}, {wch: 30}, {wch: 40}
+    ];
+    worksheet['!cols'] = wscols;
+
+    const fileName = `학사일정_${currentMonthStr.replace(". ", "_")}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  const handleDownloadPDF = () => {
+    if (monthEvents.length === 0) {
+      alert("이번 달에 등록된 학사 일정이 없습니다.");
+      return;
+    }
+    window.print();
+  };
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      <Header />
+      <div className="no-print">
+        <Header />
+      </div>
 
       <main className="max-w-6xl mx-auto w-full py-8 px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 no-print">
           <div className="flex items-center gap-4">
             <Link to="/dashboard" className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-brand-600 rounded-2xl shadow-sm transition-all active:scale-95">
               <ArrowLeft className="w-5 h-5" />
@@ -121,20 +172,87 @@ const EventsPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="flex items-center gap-4 bg-white px-4 py-1.5 rounded-2xl border border-slate-200 shadow-sm">
-            <button onClick={() => setCurrentMonth(prev => subMonths(prev, 1))} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-all active:scale-95">
-              <ChevronLeft className="w-5 h-5"/>
-            </button>
-            <h2 className="text-lg font-black w-24 text-center tracking-tight text-slate-800">
-              {format(currentMonth, 'yyyy. MM')}
-            </h2>
-            <button onClick={() => setCurrentMonth(prev => addMonths(prev, 1))} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-all active:scale-95">
-              <ChevronRight className="w-5 h-5"/>
-            </button>
+          <div className="flex items-center gap-3">
+             <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm mr-2 pr-2">
+                <button 
+                  onClick={() => setCurrentMonth(prev => subMonths(prev, 1))} 
+                  className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 transition-all active:scale-95"
+                >
+                  <ChevronLeft className="w-5 h-5"/>
+                </button>
+                <h2 className="text-lg font-black w-24 text-center tracking-tight text-slate-800">
+                  {currentMonthStr}
+                </h2>
+                <button 
+                  onClick={() => setCurrentMonth(prev => addMonths(prev, 1))} 
+                  className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 transition-all active:scale-95"
+                >
+                  <ChevronRight className="w-5 h-5"/>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleDownloadExcel}
+                  className="flex items-center gap-2 px-4 py-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-2xl font-black text-sm border border-emerald-100 shadow-sm transition-all active:scale-95 no-print"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden md:inline">엑셀 다운로드</span>
+                </button>
+                <button 
+                  onClick={handleDownloadPDF}
+                  className="flex items-center gap-2 px-4 py-3 bg-slate-800 text-white hover:bg-slate-900 rounded-2xl font-black text-sm shadow-md transition-all active:scale-95 no-print"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="hidden md:inline">PDF 저장 / 인쇄</span>
+                </button>
+              </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        {/* 인쇄 전용 테이블 (평소에는 숨김) */}
+        <div className="hidden print:block mb-8">
+          <style>{`
+            @media print {
+              .no-print { display: none !important; }
+              body { background: white !important; }
+              @page { margin: 2cm; size: A4 landscape; }
+              .print-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-family: sans-serif; }
+              .print-table th, .print-table td { border: 1px solid #ddd; padding: 12px 10px; text-align: left; font-size: 11px; }
+              .print-table th { background-color: #f8f9fa !important; font-weight: bold; color: #333; }
+              .print-title { font-size: 24px; font-weight: bold; margin-bottom: 5px; text-align: center; }
+              .print-subtitle { font-size: 14px; color: #666; margin-bottom: 20px; text-align: center; }
+            }
+          `}</style>
+          <div className="print-title">[{currentMonthStr}] 학사 일정</div>
+          <div className="print-subtitle">울릉도 스마트 교무실 시스템 공식 일정부</div>
+          <table className="print-table">
+            <thead>
+              <tr>
+                <th style={{ width: '12%' }}>날짜(시작)</th>
+                <th style={{ width: '12%' }}>날짜(종료)</th>
+                <th style={{ width: '15%' }}>시간/교시</th>
+                <th style={{ width: '10%' }}>본인/공용</th>
+                <th style={{ width: '25%' }}>행사명</th>
+                <th style={{ width: '26%' }}>전달사항 (메모)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthEvents.map(e => (
+                <tr key={e.id}>
+                  <td>{e.startDate || e.date}</td>
+                  <td>{e.endDate || e.startDate || e.date}</td>
+                  <td>{e.isAllDay ? '하루 종일' : `${e.periodStart}교시 ~ ${e.periodEnd}교시`}</td>
+                  <td>{e.type === 'EXTERNAL' ? '외부 행사' : '교과 연계'}</td>
+                  <td style={{ fontWeight: 'bold' }}>{e.description}</td>
+                  <td style={{ whiteSpace: 'pre-wrap' }}>{e.announcement || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden no-print">
           <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
             {daysOfWeek.map((day, i) => (
               <div key={day} className={`py-4 text-center text-sm font-bold tracking-tight ${i === 0 ? 'text-rose-500' : i === 6 ? 'text-blue-600' : 'text-slate-600'}`}>
