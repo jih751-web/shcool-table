@@ -14,6 +14,7 @@ import { healingQuotes } from '../data/healingQuotes';
 
 import Header from '../components/Header';
 import QuickButtons from '../components/QuickButtons';
+import SharedToolsWidget from '../components/SharedToolsWidget';
 
 // --- Healing Quote Widget (Wide Banner Style) ---
 const HealingQuoteWidget = () => {
@@ -661,7 +662,8 @@ export default function DashboardPage() {
           </div>
 
           {/* Column 2: Timeline & To-Do List */}
-          <div className="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col relative min-h-[500px]">
+          <div className="w-full flex flex-col gap-6">
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col relative min-h-[500px]">
             
             {/* 오늘의 한 줄 공지 (Whiteboard) - 포스트잇 스타일 (아코디언 접기/펼치기 지원) */}
             <div 
@@ -852,6 +854,9 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+          
+          <SharedToolsWidget />
+        </div>
 
           {/* Column 3: Assistant Panel */}
           <div className="flex flex-col gap-6 sticky lg:top-24">
