@@ -26,20 +26,20 @@ export default function FortuneWidget() {
 
     const seed = birthDate + todayStr;
     
-    const getIndex = (offset: number, length: number) => {
+    const getIndex = (offset: number, length: number, prime: number) => {
       let hash = 0;
       for (let i = 0; i < seed.length; i++) {
         hash = ((hash << 5) - hash) + seed.charCodeAt(i);
         hash |= 0;
       }
-      return Math.abs(hash + offset) % length;
+      return Math.abs((hash * prime) + offset) % length;
     };
 
     return {
-      money: fortunes.money[getIndex(100, fortunes.money.length)],
-      love: fortunes.love[getIndex(200, fortunes.love.length)],
-      health: fortunes.health[getIndex(300, fortunes.health.length)],
-      advice: fortunes.advice[getIndex(400, fortunes.advice.length)]
+      money: fortunes.money[getIndex(100, fortunes.money.length, 3)],
+      love: fortunes.love[getIndex(200, fortunes.love.length, 7)],
+      health: fortunes.health[getIndex(300, fortunes.health.length, 13)],
+      advice: fortunes.advice[getIndex(400, fortunes.advice.length, 17)]
     };
   }, [birthDate, todayStr]);
 
