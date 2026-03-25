@@ -205,11 +205,11 @@ export default function DashboardPage() {
         const id = docSnap.id;
         
         // 기간 체크 로직: 시작일 <= 오늘 <= 종료일
-        const isToday = (data.startDate && data.endDate)
+        const isEventToday = (data.startDate && data.endDate)
           ? (currentDateStr >= data.startDate && currentDateStr <= data.endDate)
           : (data.date === currentDateStr);
 
-        if (isToday) {
+        if (isEventToday) {
           evs.push({ ...data, id });
         }
       });
