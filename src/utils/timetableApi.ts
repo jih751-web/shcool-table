@@ -238,8 +238,8 @@ export const executeMakeupTransaction = async (
       originalTeacherId: requesterId,
       newTeacherId: targetId,
       newTeacherName: tarBaseData.teacherName,
-      subject: targetSubject, // 보강자(B)의 원본 과목
-      gradeClass: targetGradeClass, // 보강자(B)의 원본 반
+      subject: "", // 보강자(B)는 해당 시간에 원래 수업이 없으므로 빈 값으로 처리
+      gradeClass: "", // 보강자(B)는 해당 시간에 원래 수업이 없으므로 빈 값으로 처리
       type: 'MAKEUP',
       createdAt: serverTimestamp()
     });
