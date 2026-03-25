@@ -207,17 +207,17 @@ const GlobalTimetablePage: React.FC = () => {
           </div>
 
           {/* Grid Container */}
-          <div className="flex-1 overflow-auto custom-scrollbar bg-slate-200">
-            <table className="border-collapse text-[11px] table-fixed bg-white m-0" style={{ width: 'max-content' }}>
+          <div className="flex-1 overflow-auto custom-scrollbar bg-slate-200 w-full relative">
+            <table className="border-collapse text-[11px] min-w-max bg-white m-0 border-separate border-spacing-0" style={{ tableLayout: 'auto' }}>
               <thead className="sticky top-0 z-30 font-bold text-slate-800">
                 {/* 1 Row: Dates */}
                 <tr>
-                  <th colSpan={2} className="w-[120px] border border-slate-300 bg-slate-100 sticky left-0 z-40"></th>
+                  <th colSpan={2} className="w-[120px] border border-slate-300 bg-slate-100 sticky left-0 top-0 z-50"></th>
                   {DAYS.map((day, idx) => {
                     const dateObj = addDays(weekStartsOn, idx);
                     const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
                     return (
-                      <th key={`date-${day}`} colSpan={7} className="border border-slate-300 bg-white p-1 text-center text-sm">
+                      <th key={`date-${day}`} colSpan={7} className="border border-slate-300 bg-slate-50 p-1 text-center text-sm sticky top-0 z-30">
                         {dateStr}
                       </th>
                     );
@@ -225,21 +225,21 @@ const GlobalTimetablePage: React.FC = () => {
                 </tr>
                 {/* 2 Row: Days */}
                 <tr>
-                  <th className="w-[40px] border border-slate-300 bg-slate-100 p-1 text-center sticky left-0 z-40">번호</th>
-                  <th className="w-[80px] border border-slate-300 bg-slate-100 p-1 text-center sticky left-[40px] z-40">교사</th>
+                  <th className="w-[40px] border border-slate-300 bg-slate-100 p-1 text-center sticky left-0 top-[29px] z-50">번호</th>
+                  <th className="w-[80px] border border-slate-300 bg-slate-100 p-1 text-center sticky left-[40px] top-[29px] z-50">교사</th>
                   {DAYS.map(day => (
-                    <th key={`day-${day}`} colSpan={7} className="border border-slate-300 bg-slate-100 p-1 text-center">
+                    <th key={`day-${day}`} colSpan={7} className="border border-slate-300 bg-slate-100 p-1 text-center sticky top-[29px] z-30">
                       {day}
                     </th>
                   ))}
                 </tr>
                 {/* 3 Row: Periods */}
                 <tr>
-                  <th className="border border-slate-300 bg-slate-100 sticky left-0 z-40 h-6"></th>
-                  <th className="border border-slate-300 bg-slate-100 sticky left-[40px] z-40 h-6"></th>
+                  <th className="border border-slate-300 bg-slate-100 sticky left-0 top-[56px] z-50 h-5 shadow-[1px_0_0_0_#cbd5e1]"></th>
+                  <th className="border border-slate-300 bg-slate-100 sticky left-[40px] top-[56px] z-50 h-5 shadow-[1px_0_0_0_#cbd5e1]"></th>
                   {DAYS.map(day => (
                     PERIODS.map(period => (
-                      <th key={`period-${day}-${period}`} className="w-[45px] border border-slate-300 bg-white text-center font-normal">
+                      <th key={`period-${day}-${period}`} className="min-w-[45px] border border-slate-300 bg-white text-center font-normal sticky top-[56px] z-30">
                         {period}
                       </th>
                     ))
@@ -266,11 +266,12 @@ const GlobalTimetablePage: React.FC = () => {
                     return (
                       <tr key={t.id} className="hover:bg-blue-50/30">
                         {/* Number */}
-                        <td className="border border-slate-300 text-center font-medium text-slate-600 bg-white sticky left-0 z-20">
+                        {/* Number */}
+                        <td className="border border-slate-300 text-center font-medium text-slate-600 bg-white sticky left-0 z-20 shadow-[1px_0_0_0_#cbd5e1]">
                           {index + 1}
                         </td>
                         {/* Teacher Name */}
-                        <td className={`border border-slate-300 text-center font-bold px-1 sticky left-[40px] z-20 ${isMe ? 'bg-blue-50 text-blue-700' : 'bg-white text-slate-800'}`}>
+                        <td className={`border border-slate-300 text-center font-bold px-1 sticky left-[40px] z-20 shadow-[1px_0_0_0_#cbd5e1] ${isMe ? 'bg-blue-50 text-blue-700' : 'bg-white text-slate-800'}`}>
                           {userProfiles[t.id]?.nickname || t.teacherName}
                         </td>
                         {/* Slots */}
