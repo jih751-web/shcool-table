@@ -210,29 +210,62 @@ const EventsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 인쇄 전용 스타일 (A4 가로 꽉 차게) */}
+        {/* 인쇄 전용 스타일 (A4 가로 1장 꽉 차게) */}
         <style>{`
           @media print {
             .no-print { display: none !important; }
-            body { background: white !important; margin: 0 !important; padding: 0 !important; }
-            main { max-width: none !important; margin: 0 !important; padding: 1.5cm !important; width: 100% !important; }
+            html, body { 
+              background: white !important; 
+              margin: 0 !important; 
+              padding: 0 !important; 
+              height: auto !important;
+              min-height: 0 !important;
+            }
+            main { 
+              max-width: none !important; 
+              margin: 0 !important; 
+              padding: 8mm !important; 
+              width: 100% !important; 
+              height: auto !important;
+              min-height: 0 !important;
+              display: block !important;
+            }
             .print-calendar-container { 
-              border: 2px solid #333 !important; 
+              border: 2px solid #1e293b !important; 
               border-radius: 0 !important; 
               box-shadow: none !important;
               width: 100% !important;
+              height: auto !important;
+              min-height: 0 !important;
               print-color-adjust: exact;
               -webkit-print-color-adjust: exact;
+              break-inside: avoid;
+              page-break-inside: avoid;
+              transform: scale(0.99);
+              transform-origin: top center;
             }
-            .grid-cols-7 { border-collapse: collapse !important; }
+            .calendar-grid-container {
+               display: grid !important;
+               grid-template-columns: repeat(7, 1fr) !important;
+               grid-auto-rows: 1fr !important;
+               gap: 0 !important;
+               border-top: 1px solid #1e293b !important;
+            }
             .calendar-day-cell { 
-              min-height: 120px !important; 
-              border: 0.5px solid #eee !important;
+              min-height: 100px !important; 
+              height: auto !important;
+              border: 0.5px solid #cbd5e1 !important;
+              padding: 8px !important;
               print-color-adjust: exact;
               -webkit-print-color-adjust: exact;
+              display: flex !important;
+              flex-direction: column !important;
             }
             .calendar-event-tag {
               border-width: 1px !important;
+              padding: 2px 4px !important;
+              margin-bottom: 2px !important;
+              font-size: 9px !important;
               print-color-adjust: exact;
               -webkit-print-color-adjust: exact;
             }
@@ -243,9 +276,9 @@ const EventsPage: React.FC = () => {
             .print-header { 
               display: block !important; 
               text-align: center; 
-              margin-bottom: 20px;
+              margin-bottom: 12px;
             }
-            .print-header h1 { font-size: 28px; font-weight: 900; color: #1e293b; }
+            .print-header h1 { font-size: 24px; font-weight: 900; color: #1e293b; margin: 0; }
           }
           .print-header { display: none; }
         `}</style>
@@ -271,7 +304,7 @@ const EventsPage: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
+          <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px calendar-grid-container">
             {calendarDays.map((day, i) => {
               const dayStr = format(day, 'yyyy-MM-dd');
               const dayEvents = events.filter(e => {
