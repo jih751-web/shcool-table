@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share, Megaphone, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
 import { db } from '../lib/firebase';
@@ -102,6 +102,9 @@ export default function DashboardPage() {
   
   // PWA Install Prompt State (초안전 모드 관리)
   const [showIOSModal, setShowIOSModal] = useState(false);
+  
+  // 날짜 선택기 Ref
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -425,6 +428,17 @@ export default function DashboardPage() {
   const handleNextDay = () => setCurrentDate(prev => addDays(prev, 1));
   const handleToday = () => setCurrentDate(new Date());
 
+  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedDate = new Date(e.target.value);
+    if (!isNaN(selectedDate.getTime())) {
+      setCurrentDate(selectedDate);
+    }
+  };
+
+  const triggerDatePicker = () => {
+    dateInputRef.current?.showPicker();
+  };
+
   // Merge Logic: 오버라이드(기존/신규) 병합 로직
   const getTodaySchedule = (): ClassSlot[] => {
     // 1. 기초 시간표에서 오늘의 요일 데이터 가져오기
@@ -734,14 +748,29 @@ export default function DashboardPage() {
                 </button>
               </div>
               
-              <div className="flex items-center justify-center gap-6 w-full">
+              <div className="flex items-center justify-center gap-4 w-full">
                 <button onClick={handlePrevDay} className="p-2 bg-white rounded-full shadow-sm text-brand-600 hover:bg-brand-100 transition-colors shrink-0">
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 
-                <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight text-center min-w-[140px]">
-                  {format(currentDate, 'M월 d일')} <span className={dayOfWeekStr === '토' ? 'text-blue-500' : dayOfWeekStr === '일' ? 'text-red-500' : 'text-slate-500'}>({dayOfWeekStr})</span>
-                </h3>
+                <div className="relative flex flex-col items-center">
+                  <div 
+                    onClick={triggerDatePicker}
+                    className="flex items-center gap-2 cursor-pointer group hover:bg-brand-100/50 px-4 py-1 rounded-2xl transition-all"
+                  >
+                    <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight text-center min-w-[140px]">
+                      {format(currentDate, 'M월 d일')} <span className={dayOfWeekStr === '토' ? 'text-blue-500' : dayOfWeekStr === '일' ? 'text-red-500' : 'text-slate-500'}>({dayOfWeekStr})</span>
+                    </h3>
+                    <Calendar className="w-5 h-5 text-brand-600 group-hover:scale-110 transition-transform" />
+                  </div>
+                  <input 
+                    ref={dateInputRef}
+                    type="date" 
+                    className="absolute opacity-0 pointer-events-none" 
+                    onChange={handleDateSelect}
+                    value={currentDateStr}
+                  />
+                </div>
 
                 <button onClick={handleNextDay} className="p-2 bg-white rounded-full shadow-sm text-brand-600 hover:bg-brand-100 transition-colors shrink-0">
                   <ChevronRight className="w-5 h-5" />

@@ -161,6 +161,10 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
         [1, 2, 3, 4, 5, 6, 7].forEach(p => {
           const tarTargSlotData = tarTargetDaySlots.find(s => s.period === p);
           const myTargSlotData = myTargetDaySlots.find(s => s.period === p);
+
+          // [추가] 맞교환은 반드시 동일 학년/반 수업끼리만 가능 (학생 시간표 보호)
+          if (tarTargSlotData && tarTargSlotData.subject && tarTargSlotData.gradeClass !== sourceSlot.gradeClass) return;
+
           if ((tarTargSlotData && tarTargSlotData.subject) && (!myTargSlotData || !myTargSlotData.subject)) {
              if (targetDateObj.dateStr === sourceSlot.date && p === sourceSlot.period) return;
              validSlots.push({
@@ -198,6 +202,12 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
 
   const handleConfirm = async () => {
     if (!myTimetable || !sourceSlot || !selectedGlobalSlot) return;
+
+    // [검증] 맞교환(SWAP) 모드일 때 학년/반 일치 여부 최종 확인
+    if (mode === 'SWAP' && selectedGlobalSlot.gradeClass !== sourceSlot.gradeClass) {
+      alert(`시간표 맞교환 실패: \n\n내 수업(${sourceSlot.gradeClass})과 상대방 수업(${selectedGlobalSlot.gradeClass})의 학년/반이 일치하지 않습니다.`);
+      return;
+    }
 
     setProcessing(true);
     try {
