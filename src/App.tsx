@@ -126,6 +126,13 @@ function App() {
         <SiteGuard>
           <Router>
             <AppRoutes />
+            {/* 사이트 크레딧 (왼쪽 하단 고정) */}
+            <div className="fixed bottom-0 left-0 z-50 p-4 pointer-events-none">
+              <div className="pointer-events-auto text-[10px] text-slate-400 font-medium flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity">
+                designed by <span className="font-bold text-slate-500">장인한</span> , 
+                문의: <a href="mailto:dlsgks3698@naver.com" className="hover:text-brand-600 hover:underline transition-colors">dlsgks3698@naver.com</a>
+              </div>
+            </div>
           </Router>
         </SiteGuard>
       </AuthProvider>
