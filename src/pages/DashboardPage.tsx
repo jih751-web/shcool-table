@@ -235,7 +235,7 @@ export default function DashboardPage() {
   // 3.5 오늘의 교과방과후 실시간 구독 (Phase 14)
   useEffect(() => {
     if (!user) return;
-    // [보안 패치] 본인의 방과후 수업만 보이도록 teacherId 필터 추가
+    // [보안 패치] 타 교사의 수업이 노출되지 않도록 teacherId(UID) 필터링을 완벽하게 적용
     const q = query(
       collection(db, 'afterSchoolClasses'), 
       where('date', '==', currentDateStr),
@@ -243,7 +243,13 @@ export default function DashboardPage() {
     );
     const unsubAfterSchool = onSnapshot(q, (snapshot) => {
       const items: AfterSchoolClass[] = [];
-      snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data() as AfterSchoolClass;
+        // 쿼리 레벨 필터링이 있지만, 한 번 더 검증 (Defense-in-depth)
+        if (data.teacherId === user.uid) {
+           items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass);
+        }
+      });
       items.sort((a, b) => a.period - b.period);
       setAfterSchoolClassesToday(items);
     }, (error) => {

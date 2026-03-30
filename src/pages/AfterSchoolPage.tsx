@@ -54,13 +54,23 @@ const AfterSchoolPage: React.FC = () => {
       // 관리자는 모든 수업 조회 가능
       q = query(collection(db, 'afterSchoolClasses'), where('date', '==', dateStr));
     } else {
-      // 일반 교사는 본인의 수업만 조회 가능 (개인화 패치)
-      q = query(collection(db, 'afterSchoolClasses'), where('date', '==', dateStr), where('teacherId', '==', user.uid));
+      // 일반 교사는 오직 본인의 수업만 조회 가능 (UID 기반 완벽 필터링)
+      q = query(
+        collection(db, 'afterSchoolClasses'), 
+        where('date', '==', dateStr), 
+        where('teacherId', '==', user.uid)
+      );
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items: AfterSchoolClass[] = [];
-      snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data() as AfterSchoolClass;
+        // 쿼리 레벨 필터링이 있더라도 한 번 더 검증 (Defense-in-depth)
+        if (userData.isAdmin || data.teacherId === user.uid) {
+          items.push({ id: docSnap.id, ...data });
+        }
+      });
       items.sort((a, b) => a.period - b.period);
       setClasses(items);
       setLoading(false);
@@ -116,10 +126,21 @@ const AfterSchoolPage: React.FC = () => {
   };
 
   const handleDeleteClass = async (id: string) => {
+    const cls = classes.find(c => c.id === id);
+    if (!cls) return;
+
+    // 본인 수업이거나 관리자여야만 삭제 가능
+    if (cls.teacherId !== user?.uid && !userData?.isAdmin) {
+      alert('본인의 수업만 삭제할 수 있습니다.');
+      return;
+    }
+
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
     try {
       await deleteDoc(doc(db, 'afterSchoolClasses', id));
+      alert('삭제되었습니다.');
     } catch (err) {
+      console.error(err);
       alert('삭제 실패');
     }
   };
