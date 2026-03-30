@@ -11,6 +11,7 @@ import SpecialRoomPage from './pages/SpecialRoomPage';
 import NotificationToast from './components/NotificationToast';
 
 import AdminUserPage from './pages/AdminUserPage';
+import AfterSchoolPage from './pages/AfterSchoolPage';
 import SiteGuard from './components/SiteGuard';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -100,6 +101,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <StatusPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/afterschool" 
+        element={
+          <ProtectedRoute>
+            <AfterSchoolPage />
           </ProtectedRoute>
         } 
       />

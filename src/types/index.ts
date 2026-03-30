@@ -111,3 +111,31 @@ export interface Todo {
   isStarred: boolean;
   timestamp: any;
 }
+
+// Phase 14 신규: 교과방과후 (8, 9교시)
+export interface AfterSchoolClass {
+  id?: string; // `${date}_${period}_${teacherId}`
+  date: string; // YYYY-MM-DD
+  period: number; // 8 or 9
+  teacherId: string;
+  teacherName: string;
+  subject: string;
+  gradeClass: string;
+  createdAt?: any;
+}
+
+// Phase 14 신규: 교과방과후 교체 기록
+export interface AfterSchoolChange {
+  id?: string;
+  date: string; // YYYY-MM-DD
+  period: number;
+  originalTeacherId: string;
+  originalTeacherName: string;
+  newTeacherId: string;
+  newTeacherName: string;
+  subject: string;
+  gradeClass: string;
+  type: 'SWAP' | 'MAKEUP';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: any;
+}

@@ -87,6 +87,9 @@ const Header: React.FC = () => {
           <Link to="/status" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
             <Clock className="w-4 h-4" /> 교체현황
           </Link>
+          <Link to="/afterschool" className="px-3 py-1.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm whitespace-nowrap">
+            <Users className="w-4 h-4" /> 교과방과후
+          </Link>
           <a 
             href="https://drive.google.com/drive/folders/1MasUNhkb4PhagYWGwpQlZzHod5xQa0fw?usp=sharing" 
             target="_blank" 
@@ -181,6 +184,9 @@ const Header: React.FC = () => {
             </Link>
             <Link to="/status" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 border border-slate-100">
               <Clock className="w-5 h-5" /> 교체현황
+            </Link>
+            <Link to="/afterschool" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl font-bold text-slate-700 hover:bg-brand-50 border border-slate-100">
+              <Users className="w-5 h-5" /> 교과방과후
             </Link>
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
               <span className="text-sm font-bold text-slate-500 mr-auto">바로가기</span>

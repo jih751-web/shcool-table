@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Clock, AlertCircle, ChevronLeft, ChevronRight, MonitorPlay, Calendar, X, ArrowRightLeft, UserPlus, CheckCircle2, Star, Bot, BookOpen, CalendarDays, Share, Megaphone, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { doc, onSnapshot, collection, query, where, addDoc, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
-import type { Timetable, ClassSlot, Override, SchoolEvent, Todo, TimetableOverride } from '../types';
+import type { Timetable, ClassSlot, Override, SchoolEvent, Todo, TimetableOverride, AfterSchoolClass } from '../types';
 
 import SmartReplacementModal from '../components/SmartReplacementModal';
 import { addDays, subDays, format, isToday } from 'date-fns';
@@ -66,6 +66,7 @@ export default function DashboardPage() {
   const [overrideData, setOverrideData] = useState<Override | null>(null);
   const [timetableOverrides, setTimetableOverrides] = useState<TimetableOverride[]>([]);
   const [dailyEvents, setDailyEvents] = useState<SchoolEvent[]>([]);
+  const [afterSchoolClassesToday, setAfterSchoolClassesToday] = useState<AfterSchoolClass[]>([]);
   const [eventError, setEventError] = useState<string | null>(null); // 에러 상태 추가
 
   const [selectedEventForDetail, setSelectedEventForDetail] = useState<SchoolEvent | null>(null);
@@ -230,6 +231,21 @@ export default function DashboardPage() {
 
     return () => unsubEvents();
   }, [currentDateStr]);
+
+  // 3.5 오늘의 교과방과후 실시간 구독 (Phase 14)
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'afterSchoolClasses'), where('date', '==', currentDateStr));
+    const unsubAfterSchool = onSnapshot(q, (snapshot) => {
+      const items: AfterSchoolClass[] = [];
+      snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass));
+      items.sort((a, b) => a.period - b.period);
+      setAfterSchoolClassesToday(items);
+    }, (error) => {
+      console.error("After school error:", error);
+    });
+    return () => unsubAfterSchool();
+  }, [user, currentDateStr]);
 
   // 4. NEIS 급식 데이터 가져오기
   useEffect(() => {
@@ -869,6 +885,31 @@ export default function DashboardPage() {
                       </div>
                     );
                   })}
+                  
+                  {/* After School Classes (8, 9) */}
+                  {afterSchoolClassesToday.length > 0 && afterSchoolClassesToday.map((cls) => (
+                    <div 
+                      key={cls.id}
+                      onClick={() => window.location.href = '/afterschool'}
+                      className="relative py-2 px-3 rounded-xl border-2 transition-all flex items-center justify-between gap-3 bg-blue-50/50 border-blue-100 hover:border-brand-500 hover:shadow-lg cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-black bg-blue-100 text-blue-700">
+                           {cls.period}교시
+                        </span>
+                      </div>
+                      <div className="flex-1 flex items-center justify-between min-w-0">
+                        <h3 className="text-base font-black tracking-tight flex items-center gap-1.5 truncate text-slate-800">
+                           <BookOpen className="w-4 h-4 text-blue-500 shrink-0" />
+                           {cls.subject}
+                        </h3>
+                        <p className="text-blue-500 font-bold text-xs truncate ml-2">{cls.gradeClass}</p>
+                      </div>
+                      <div className="hidden group-hover:flex items-center gap-1 text-[9px] font-bold text-blue-400 bg-white px-1.5 py-0.5 rounded shadow-sm shrink-0">
+                         관리/교체로 이동
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

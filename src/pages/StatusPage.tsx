@@ -20,8 +20,35 @@ const StatusPage: React.FC = () => {
     try {
       const q = query(collection(db, 'replacements'), orderBy('timestamp', 'desc'));
       const snap = await getDocs(q);
-      const data: ReplacementRecord[] = [];
-      snap.forEach(doc => data.push({ id: doc.id, ...doc.data() } as ReplacementRecord));
+      const data: any[] = [];
+      snap.forEach(doc => data.push({ id: doc.id, ...doc.data(), recordType: 'REGULAR' }));
+
+      // Phase 14: 방과후 교체 내역 추가
+      const q2 = query(collection(db, 'afterSchoolChanges'), orderBy('createdAt', 'desc'));
+      const snap2 = await getDocs(q2);
+      snap2.forEach(doc => {
+        const d = doc.data();
+        data.push({ 
+          id: doc.id, 
+          ...d, 
+          timestamp: d.createdAt, // 필드명 통일
+          sourceDate: d.date,
+          sourcePeriod: d.period,
+          requestorId: d.originalTeacherId,
+          requestorName: d.originalTeacherName,
+          targetId: d.newTeacherId,
+          targetName: d.newTeacherName,
+          recordType: 'AFTER_SCHOOL' 
+        });
+      });
+
+      // 통합 정렬
+      data.sort((a, b) => {
+        const timeA = a.timestamp?.seconds || new Date(a.timestamp || 0).getTime();
+        const timeB = b.timestamp?.seconds || new Date(b.timestamp || 0).getTime();
+        return timeB - timeA;
+      });
+
       setRecords(data);
     } catch (e) {
       console.error(e);

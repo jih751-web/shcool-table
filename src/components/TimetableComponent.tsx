@@ -1,5 +1,4 @@
-import React from 'react';
-import type { DaySchedule, SchoolEvent } from '../types';
+import type { DaySchedule, SchoolEvent, AfterSchoolClass } from '../types';
 import { getDay, addDays } from 'date-fns';
 
 interface TimetableProps {
@@ -7,12 +6,14 @@ interface TimetableProps {
   events?: SchoolEvent[];
   weekStartsOn?: Date;
   onSlotClick?: (dayOfWeek: string, period: number, subject: string) => void;
+  afterSchoolData?: Record<string, AfterSchoolClass[]>; // dayOfWeek -> classes
 }
 
 const dayMap: Record<string, number> = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
 
-const TimetableComponent: React.FC<TimetableProps> = ({ schedule, events = [], weekStartsOn, onSlotClick }) => {
+const TimetableComponent: React.FC<TimetableProps> = ({ schedule, events = [], weekStartsOn, onSlotClick, afterSchoolData }) => {
   const periods = [1, 2, 3, 4, 5, 6, 7];
+  const afterSchoolPeriods = [8, 9];
 
   return (
     <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
@@ -100,6 +101,37 @@ const TimetableComponent: React.FC<TimetableProps> = ({ schedule, events = [], w
                              <span className="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-brand-600 bg-white/90 px-2 py-1 rounded shadow-sm translate-y-2 group-hover:translate-y-0 transition-all">교체 신청</span>
                            </div>
                         )}
+                      </div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+
+          {/* After School Rows (8, 9) */}
+          {afterSchoolData && afterSchoolPeriods.map(period => (
+            <tr key={`afterschool-period-${period}`} className="border-b border-slate-100 bg-blue-50/10 hover:bg-blue-50/30 transition-colors">
+              <td className="py-3 px-2 text-center font-bold text-blue-600 border-r border-blue-100 bg-blue-50/40">
+                {period}교시
+                <div className="text-[9px] font-black text-blue-400 mt-0.5">방과후</div>
+              </td>
+              {schedule.map(day => {
+                const dayAfterClasses = afterSchoolData[day.dayOfWeek] || [];
+                const afterClass = dayAfterClasses.find(c => c.period === period);
+                return (
+                  <td key={`after-${day.dayOfWeek}-${period}`} className="py-2 px-1 text-center relative group p-1">
+                    {afterClass ? (
+                      <div className="h-[76px] flex flex-col items-center justify-center p-2 rounded-lg m-1 shadow-sm bg-white border border-blue-200 relative overflow-hidden group-hover:shadow-md transition-all">
+                        <span className="font-bold text-[13px] text-blue-900 leading-tight text-center break-keep">{afterClass.subject}</span>
+                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm mt-1">{afterClass.gradeClass}</span>
+                        <div className="absolute top-0 right-0 p-1">
+                          <span className="text-[8px] font-black text-blue-400/60 uppercase">{afterClass.teacherName.slice(0, 1)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-[76px] flex flex-col items-center justify-center rounded-lg border border-transparent m-1 text-slate-200 text-[10px] font-bold uppercase tracking-widest">
+                        -
                       </div>
                     )}
                   </td>
