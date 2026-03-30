@@ -80,8 +80,16 @@ const TimetableComponent: React.FC<TimetableProps> = ({ schedule, events = [], w
                         }}
                         className={`h-[76px] flex flex-col items-center justify-center p-2 rounded-lg m-1 shadow-sm transition-all relative overflow-hidden ${hasEvent ? 'bg-amber-50 border border-amber-200' : 'bg-brand-50 border border-brand-100 hover:bg-brand-100 cursor-pointer hover:shadow-md hover:ring-2 hover:ring-brand-400/30'}`}
                       >
-                        <span className={`font-bold text-[15px] ${hasEvent ? 'text-amber-900' : 'text-brand-900'}`}>{slot.subject}</span>
-                        <span className={`text-[11px] font-medium mt-1 px-1.5 py-0.5 rounded shadow-sm ${hasEvent ? 'text-amber-700 bg-white/70' : 'text-brand-600 bg-white/70'}`}>{slot.gradeClass}</span>
+                        <span className={`font-bold text-[14px] leading-tight text-center break-keep ${hasEvent ? 'text-amber-900' : 'text-brand-900'}`}>
+                          {slot.subject.replace(' (보강)', '').replace(' (대강)', '')}
+                        </span>
+                        <span className={`text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded shadow-sm ${hasEvent ? 'text-amber-700 bg-white/70' : 'text-brand-600 bg-white/70'}`}>{slot.gradeClass}</span>
+                        {slot.subject.includes('(보강)') && (
+                          <div className="absolute bottom-1 right-1 text-[8px] font-black bg-orange-500/10 text-orange-600 px-1 py-0.5 rounded border border-orange-200/40 leading-none">보강</div>
+                        )}
+                        {slot.subject.includes('(대강)') && (
+                          <div className="absolute bottom-1 right-1 text-[8px] font-black bg-brand-600/10 text-brand-700 px-1 py-0.5 rounded border border-brand-200/40 leading-none">대강</div>
+                        )}
                         {hasEvent && (
                           <div className="absolute top-0 right-0 left-0 bg-amber-400/90 text-[10px] font-bold text-white px-1 py-0.5 text-center truncate pointer-events-none">
                             {hasEvent.description}
