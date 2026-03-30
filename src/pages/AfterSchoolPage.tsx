@@ -47,7 +47,17 @@ const AfterSchoolPage: React.FC = () => {
 
   // Fetch Classes for Selected Date
   useEffect(() => {
-    const q = query(collection(db, 'afterSchoolClasses'), where('date', '==', dateStr));
+    if (!user || !userData) return;
+
+    let q;
+    if (userData.isAdmin) {
+      // 관리자는 모든 수업 조회 가능
+      q = query(collection(db, 'afterSchoolClasses'), where('date', '==', dateStr));
+    } else {
+      // 일반 교사는 본인의 수업만 조회 가능 (개인화 패치)
+      q = query(collection(db, 'afterSchoolClasses'), where('date', '==', dateStr), where('teacherId', '==', user.uid));
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items: AfterSchoolClass[] = [];
       snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass));
@@ -56,18 +66,31 @@ const AfterSchoolPage: React.FC = () => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [dateStr]);
+  }, [dateStr, user, userData]);
 
   // Fetch Changes for Selected Date
   useEffect(() => {
+    if (!user || !userData) return;
+
     const q = query(collection(db, 'afterSchoolChanges'), where('date', '==', dateStr));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items: AfterSchoolChange[] = [];
-      snapshot.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolChange));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data() as AfterSchoolChange;
+        
+        // 관리자가 아니면 본인이 포함된 변경 내역(원래 담당 또는 새로운 담당)만 표시
+        if (!userData.isAdmin) {
+           if (data.originalTeacherId === user.uid || data.newTeacherId === user.uid) {
+             items.push({ id: docSnap.id, ...data });
+           }
+        } else {
+           items.push({ id: docSnap.id, ...data });
+        }
+      });
       setChanges(items);
     });
     return () => unsubscribe();
-  }, [dateStr]);
+  }, [dateStr, user, userData]);
 
   const handleAddClass = async (e: React.FormEvent) => {
     e.preventDefault();

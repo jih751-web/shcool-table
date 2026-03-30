@@ -103,5 +103,33 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
     }
+    // 9. 교과방과후 (afterSchoolClasses) - Phase 14
+    match /afterSchoolClasses/{classId} {
+      allow read: if request.auth != null;
+      // 생성: 본인의 UID로만 생성 가능 (또는 관리자)
+      allow create: if request.auth != null && (
+        request.resource.data.teacherId == request.auth.uid || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+        request.auth.token.email == 'jih751@gmail.com'
+      );
+      // 수정/삭제: 데이터 소유자 또는 관리자
+      allow update, delete: if request.auth != null && (
+        resource.data.teacherId == request.auth.uid || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+        request.auth.token.email == 'jih751@gmail.com'
+      );
+    }
+    
+    // 10. 교과방과후 변경 내역 (afterSchoolChanges) - Phase 14
+    match /afterSchoolChanges/{changeId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        resource.data.originalTeacherId == request.auth.uid || 
+        resource.data.newTeacherId == request.auth.uid || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+        request.auth.token.email == 'jih751@gmail.com'
+      );
+    }
   }
 }
