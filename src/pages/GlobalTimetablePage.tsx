@@ -4,19 +4,18 @@ import { CalendarRange, ChevronLeft, ChevronRight, Loader2, ArrowLeft, Plus } fr
 import Header from '../components/Header';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import type { Timetable, ClassSlot, TimetableOverride, AfterSchoolClass } from '../types';
+import type { Timetable, ClassSlot, TimetableOverride } from '../types';
 import { executeSwapTransaction } from '../utils/timetableApi';
 import { startOfWeek, addWeeks, subWeeks, format, addDays } from 'date-fns';
 import { Link } from 'react-router-dom';
 
 const DAYS = ['월', '화', '수', '목', '금'];
-const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+const PERIODS = [1, 2, 3, 4, 5, 6, 7];
 
 const GlobalTimetablePage: React.FC = () => {
   const { user, userProfiles } = useAuth();
   const [allTimetables, setAllTimetables] = useState<Timetable[]>([]);
   const [timetableOverrides, setTimetableOverrides] = useState<TimetableOverride[]>([]);
-  const [afterSchoolClasses, setAfterSchoolClasses] = useState<AfterSchoolClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -69,28 +68,6 @@ const GlobalTimetablePage: React.FC = () => {
     });
 
     return () => unsubscribeOverrides();
-  }, [currentDate]);
-
-  // 3. 주간 교과방과후 데이터 실시간 구독 (Phase 14)
-  useEffect(() => {
-    const weekEndDate = format(addDays(weekStartsOn, 5), 'yyyy-MM-dd');
-    const weekStartDate = format(weekStartsOn, 'yyyy-MM-dd');
-
-    const q = query(
-      collection(db, 'afterSchoolClasses'),
-      where('date', '>=', weekStartDate),
-      where('date', '<=', weekEndDate)
-    );
-
-    const unsubscribeAfterSchool = onSnapshot(q, (snapshot) => {
-      const items: AfterSchoolClass[] = [];
-      snapshot.forEach(docSnap => {
-        items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass);
-      });
-      setAfterSchoolClasses(items);
-    });
-
-    return () => unsubscribeAfterSchool();
   }, [currentDate]);
 
   const handleCellClick = async (timetable: Timetable, day: string, period: number, slot?: ClassSlot) => {
@@ -217,10 +194,6 @@ const GlobalTimetablePage: React.FC = () => {
               <button onClick={handlePrevWeek} className="p-1 border border-slate-300 bg-white hover:bg-slate-100 rounded text-slate-600"><ChevronLeft className="w-4 h-4" /></button>
               <h2 className="text-sm font-bold text-slate-800 px-2 min-w-[120px] text-center">{weekDisplay}</h2>
               <button onClick={handleNextWeek} className="p-1 border border-slate-300 bg-white hover:bg-slate-100 rounded text-slate-600"><ChevronRight className="w-4 h-4" /></button>
-              <div className="ml-4 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded tracking-tighter uppercase">8-9교시 방과후 포함됨</span>
-              </div>
             </div>
             
             <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
@@ -293,7 +266,6 @@ const GlobalTimetablePage: React.FC = () => {
                     return (
                       <tr key={t.id} className="hover:bg-blue-50/30">
                         {/* Number */}
-                        {/* Number */}
                         <td className="border border-slate-300 text-center font-medium text-slate-600 bg-white sticky left-0 z-20 shadow-[1px_0_0_0_#cbd5e1]">
                           {index + 1}
                         </td>
@@ -345,42 +317,25 @@ const GlobalTimetablePage: React.FC = () => {
                                 cellBg = 'bg-white hover:bg-slate-50 cursor-pointer';
                             }
 
-                            // Phase 14: After School Data Injection
-                            if (period >= 8) {
-                               const dateOfCell = format(addDays(weekStartsOn, DAYS.indexOf(day)), 'yyyy-MM-dd');
-                               const asClass = afterSchoolClasses.find(c => c.date === dateOfCell && c.period === period && c.teacherId === t.id);
-                               if (asClass) {
-                                 displaySlot = { period, subject: asClass.subject, gradeClass: asClass.gradeClass };
-                                 cellBg = 'bg-blue-50/80 outline outline-1 outline-blue-200/50';
-                               } else {
-                                 displaySlot = { period, subject: '', gradeClass: '' };
-                                 cellBg = 'bg-slate-50/30';
-                               }
-                            }
-
-                            const hasFinalClass = !!displaySlot.subject;
-                            const isFinalOverridden = period < 8 && (!!myInOv || !!myOutOv);
-
                             return (
                               <td 
                                 key={`${t.id}-${day}-${period}`}
-                                onClick={() => period < 8 && handleCellClick(t, day, period, slot)}
+                                onClick={() => handleCellClick(t, day, period, slot)}
                                 className={`border border-slate-300 p-0 text-center relative font-sans ${cellBg}`}
                                 style={{ height: '42px', verticalAlign: 'middle', userSelect: 'none' }}
                               >
-                                {hasFinalClass ? (
+                                {hasMergedClass ? (
                                   <div className="flex flex-col items-center justify-center w-full h-full px-0.5 leading-[1.2]">
                                       <div className={`font-bold text-[11px] truncate w-full ${isSelected ? 'text-blue-800' : (displaySlot.subject.includes('(보강)') ? 'text-orange-600' : displaySlot.subject.includes('(대강)') ? 'text-brand-600' : (displaySlot.subject === '역사' || displaySlot.subject === '도덕' || displaySlot.subject === '체육' ? 'text-blue-600' : displaySlot.subject === '과학' || displaySlot.subject === '기술가정' ? 'text-red-600' : 'text-slate-800'))}`}>
                                         {displaySlot.subject.replace(' (보강)', '').replace(' (대강)', '')}
                                         {displaySlot.subject.includes('(보강)') && <span className="block text-[8px] leading-tight text-white bg-orange-500 rounded mt-0.5 px-1 font-black">보강:{userProfiles[t.id]?.nickname || t.teacherName}</span>}
                                         {displaySlot.subject.includes('(대강)') && <span className="block text-[8px] leading-tight text-white bg-brand-600 rounded mt-0.5 px-1 font-black">대강:{userProfiles[t.id]?.nickname || t.teacherName}</span>}
-                                        {period >= 8 && <span className="block text-[7px] leading-none text-blue-500 font-black mt-0.5 uppercase">방과후</span>}
                                       </div>
                                     <div className="text-[10px] font-medium text-slate-600 truncate w-full mt-[1px]">
                                       {displaySlot.gradeClass}
                                     </div>
                                   </div>
-                                ) : isFinalOverridden ? (
+                                ) : isOverridden ? (
                                    <div className="text-[9px] font-bold text-slate-400 italic">변경됨</div>
                                 ) : null}
                               </td>
