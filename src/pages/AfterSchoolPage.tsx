@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, getDocs, updateDoc, serverTimestamp, writeBatch, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays } from 'date-fns';
@@ -17,10 +17,13 @@ import {
   ChevronLeft,
   ChevronRight,
   UserPlus,
-  Edit2
+  Edit2,
+  Download,
+  ClipboardCheck
 } from 'lucide-react';
 import Header from '../components/Header';
 import type { AfterSchoolClass, AfterSchoolChange } from '../types';
+import * as XLSX from 'xlsx';
 
 const Loader2 = ({ className }: { className?: string }) => (
   <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -50,6 +53,8 @@ const AfterSchoolPage: React.FC = () => {
   const [adminSelectedTeacherId, setAdminSelectedTeacherId] = useState('');
   const [swapTargetTeacherId, setSwapTargetTeacherId] = useState('');
   const [swapType, setSwapType] = useState<'SWAP' | 'MAKEUP'>('SWAP');
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Initialize adminSelectedTeacherId when user is available
@@ -115,6 +120,106 @@ const AfterSchoolPage: React.FC = () => {
       </div>
     );
   }
+
+  // --- CSV Bulk Upload Logic ---
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userData?.isAdmin) return;
+
+    setIsBulkUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const workbook = XLSX.read(bstr, { type: 'binary', codepage: 949 }); // 한글 인코딩 고려
+        const sheetName = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 }) as any[][];
+
+        if (rows.length < 5) {
+          alert('CSV 형식이 올바르지 않습니다. (데이터 부족)');
+          return;
+        }
+
+        const batch = writeBatch(db);
+        let count = 0;
+
+        // 1. 날짜 파싱 (Row 2 / Index 2)
+        const dateRow = rows[2];
+        const periodRow = rows[3];
+        
+        // 날짜 파싱 헬퍼 ( "3/16(월)" -> "2026-03-16" )
+        const parseDateString = (str: string) => {
+          if (!str) return null;
+          const match = str.match(/(\d+)\/(\d+)/);
+          if (match) {
+            const m = match[1].padStart(2, '0');
+            const d = match[2].padStart(2, '0');
+            return `2026-${m}-${d}`;
+          }
+          return null;
+        };
+
+        // 2. 데이터 추출 (Row 4 / Index 4 부터 2줄씩)
+        for (let i = 4; i < rows.length; i += 2) {
+          const teacherName = rows[i][1]; // B열 (Index 1)
+          if (!teacherName) continue;
+
+          // 교사 ID 매칭
+          const profile = Object.values(userProfiles).find(p => p.nickname === teacherName || p.name === teacherName);
+          const teacherId = profile?.uid || `legacy_${teacherName}`;
+
+          // C열(Index 2)부터 순회
+          for (let col = 2; col < rows[i].length; col++) {
+            const subject = rows[i][col];
+            const classInfo = rows[i+1]?.[col];
+
+            if (subject && classInfo) {
+              // 날짜 결정 (짝수 열은 상속, 홀수 열은 왼쪽 참조)
+              const dateIdx = col % 2 === 0 ? col : col - 1;
+              const dateRaw = dateRow[dateIdx];
+              const dateParsed = parseDateString(String(dateRaw || ''));
+              
+              if (!dateParsed) continue;
+
+              // 교시 결정 (Index 3 데이터: "1"->8, "2"->9)
+              const periodRaw = String(periodRow[col] || '');
+              const period = periodRaw === '1' ? 8 : periodRaw === '2' ? 9 : null;
+
+              if (period) {
+                const classId = `${dateParsed}_${period}_${teacherId}`;
+                const docRef = doc(db, 'afterSchoolClasses', classId);
+                
+                batch.set(docRef, {
+                   date: dateParsed,
+                   period,
+                   teacher: teacherName,
+                   teacherId,
+                   subject: String(subject).trim(),
+                   gradeClass: String(classInfo).trim(),
+                   createdAt: serverTimestamp()
+                });
+                count++;
+              }
+            }
+          }
+        }
+
+        if (count > 0) {
+          await batch.commit();
+          alert(`업로드 성공! 총 ${count}개의 수업이 등록되었습니다.`);
+        } else {
+          alert('업로드할 데이터가 없습니다.');
+        }
+      } catch (err: any) {
+        console.error('Bulk upload error:', err);
+        alert('업로드 중 오류 발생: ' + err.message);
+      } finally {
+        setIsBulkUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
 
   const handleAddClass = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,6 +348,53 @@ const AfterSchoolPage: React.FC = () => {
             <Plus className="w-5 h-5" /> 수업 등록
           </button>
         </div>
+
+        {/* CSV Bulk Upload Tool (Admin Only) */}
+        {userData?.isAdmin && (
+          <div className="bg-slate-800 rounded-3xl p-6 mb-8 shadow-xl border border-slate-700 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+               <div className="flex items-center gap-4">
+                  <div className="p-3 bg-brand-500/20 rounded-2xl text-brand-400">
+                    <Download className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white tracking-tight">방과후 수업 CSV 일괄 업로드</h4>
+                    <p className="text-slate-400 text-xs font-medium">정해진 양식의 CSV 파일을 선택하여 대량으로 등록하세요.</p>
+                  </div>
+               </div>
+               
+               <div className="flex items-center gap-3 w-full md:w-auto">
+                  <input 
+                    type="file" 
+                    accept=".csv" 
+                    onChange={handleBulkUpload}
+                    ref={fileInputRef}
+                    className="hidden"
+                  />
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isBulkUploading}
+                    className={`flex-1 md:flex-none px-6 py-3 rounded-2xl font-black transition-all flex items-center justify-center gap-2 shadow-lg 
+                      ${isBulkUploading 
+                        ? 'bg-slate-700 text-slate-500 cursor-not-allowed' 
+                        : 'bg-white text-slate-900 hover:bg-slate-50 active:scale-95'}`}
+                  >
+                    {isBulkUploading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        파싱 중...
+                      </>
+                    ) : (
+                      <>
+                        <ClipboardCheck className="w-4 h-4" />
+                        CSV 파일 선택 및 업로드
+                      </>
+                    )}
+                  </button>
+               </div>
+            </div>
+          </div>
+        )}
 
         {/* Date Selector */}
         <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 mb-8 flex flex-col items-center gap-4">
