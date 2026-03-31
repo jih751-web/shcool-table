@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays } from 'date-fns';
@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  UserPlus
+  UserPlus,
+  Edit2
 } from 'lucide-react';
 import Header from '../components/Header';
 import type { AfterSchoolClass, AfterSchoolChange } from '../types';
@@ -39,37 +40,43 @@ const AfterSchoolPage: React.FC = () => {
     subject: '',
     gradeClass: ''
   });
+  const [adminSelectedTeacherId, setAdminSelectedTeacherId] = useState('');
   const [swapTargetTeacherId, setSwapTargetTeacherId] = useState('');
   const [swapType, setSwapType] = useState<'SWAP' | 'MAKEUP'>('SWAP');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Initialize adminSelectedTeacherId when user is available
+  useEffect(() => {
+    if (user && !adminSelectedTeacherId) {
+      setAdminSelectedTeacherId(user.uid);
+    }
+  }, [user]);
+
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-  // Fetch Classes for Selected Date
+  // Guard for null userData
+  if (!user || !userData) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
+      </div>
+    );
+  }
+
+  // Fetch ALL Classes for Selected Date (to support Status Grid)
   useEffect(() => {
     if (!user || !userData) return;
 
-    let q;
-    if (userData.isAdmin) {
-      // 관리자는 모든 수업 조회 가능
-      q = query(collection(db, 'afterSchoolClasses'), where('date', '==', dateStr));
-    } else {
-      // 일반 교사는 오직 본인의 수업만 조회 가능 (UID 기반 완벽 필터링)
-      q = query(
-        collection(db, 'afterSchoolClasses'), 
-        where('date', '==', dateStr), 
-        where('teacherId', '==', user.uid)
-      );
-    }
+    // 현황판 구현을 위해 모든 사용자가 해당 날짜의 전체 방과후 수업을 조회할 수 있도록 함
+    const q = query(
+      collection(db, 'afterSchoolClasses'), 
+      where('date', '==', dateStr)
+    );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items: AfterSchoolClass[] = [];
       snapshot.forEach(docSnap => {
-        const data = docSnap.data() as AfterSchoolClass;
-        // 쿼리 레벨 필터링이 있더라도 한 번 더 검증 (Defense-in-depth)
-        if (userData.isAdmin || data.teacherId === user.uid) {
-          items.push({ id: docSnap.id, ...data });
-        }
+        items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass);
       });
       items.sort((a, b) => a.period - b.period);
       setClasses(items);
@@ -107,17 +114,26 @@ const AfterSchoolPage: React.FC = () => {
     if (!user || !userData) return;
     setIsProcessing(true);
     try {
-      await addDoc(collection(db, 'afterSchoolClasses'), {
+      // 관리자인 경우 선택된 교사의 정보를 사용, 아니면 본인 정보 사용
+      const targetTeacherId = userData.isAdmin ? adminSelectedTeacherId : user.uid;
+      const targetTeacher = userProfiles[targetTeacherId];
+      
+      // 데이터 무결성을 위해 고유 ID 생성 (날짜_교시_교사ID)
+      const classId = `${dateStr}_${newClass.period}_${targetTeacherId}`;
+      
+      await setDoc(doc(db, 'afterSchoolClasses', classId), {
         date: dateStr,
         period: newClass.period,
         subject: newClass.subject,
         gradeClass: newClass.gradeClass,
-        teacherId: user.uid,
-        teacherName: userData.nickname || userData.name || '선생님',
+        teacherId: targetTeacherId,
+        teacherName: targetTeacher?.nickname || targetTeacher?.name || '선생님',
         createdAt: serverTimestamp()
       });
+      
       setIsAddModalOpen(false);
       setNewClass({ period: 8, subject: '', gradeClass: '' });
+      // 관리자라도 입력 후에는 다시 본인으로 초기화하지 않고 유지 (연속 입력 편의성)
     } catch (err) {
       console.error(err);
       alert('등록 실패');
@@ -239,26 +255,28 @@ const AfterSchoolPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Class List */}
-          <div className="flex flex-col gap-4">
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          
+          {/* 1. My Classes Section (Personalized Management) */}
+          <div className="xl:col-span-1 flex flex-col gap-4">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 px-2">
               <Calendar className="w-5 h-5 text-brand-500" />
-              오늘의 수업 목록
+              내 수업 관리
             </h3>
             {loading ? (
               <div className="bg-white rounded-3xl p-12 border border-slate-200 flex flex-col items-center gap-3">
                 <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
                 <p className="text-slate-400 font-bold">불러오는 중...</p>
               </div>
-            ) : classes.length === 0 ? (
+            ) : classes.filter(c => c.teacherId === user?.uid).length === 0 ? (
               <div className="bg-white rounded-3xl p-12 border border-slate-200 flex flex-col items-center gap-3 text-center">
                 <AlertCircle className="w-12 h-12 text-slate-200" />
-                <p className="text-slate-400 font-bold">등록된 방과후 수업이 없습니다.</p>
+                <p className="text-slate-400 font-bold">오늘 등록된 본인의 수업이 없습니다.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {classes.map(cls => (
+                {classes.filter(c => c.teacherId === user?.uid).map(cls => (
                   <div key={cls.id} className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-brand-50 rounded-xl flex flex-col items-center justify-center text-brand-700">
@@ -267,71 +285,185 @@ const AfterSchoolPage: React.FC = () => {
                       </div>
                       <div>
                         <h4 className="text-lg font-black text-slate-800 tracking-tight">{cls.subject}</h4>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-1 mt-0.5">
                           <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{cls.gradeClass}</span>
-                          <span className="text-xs font-bold text-brand-600">{cls.teacherName} 선생님</span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {cls.teacherId === user?.uid && (
-                        <>
-                          <button 
-                            onClick={() => { setSelectedClass(cls); setIsSwapModalOpen(true); }}
-                            className="p-2.5 bg-brand-50 text-brand-600 rounded-xl hover:bg-brand-600 hover:text-white transition-all active:scale-95 shadow-sm"
-                            title="수업 교체"
-                          >
-                            <ArrowRightLeft className="w-5 h-5" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteClass(cls.id!)}
-                            className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-95 shadow-sm"
-                            title="삭제"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </>
-                      )}
+                       <button 
+                         onClick={() => { setSelectedClass(cls); setIsSwapModalOpen(true); }}
+                         className="p-2 bg-brand-50 text-brand-600 rounded-xl hover:bg-brand-600 hover:text-white transition-all active:scale-95 shadow-sm"
+                       >
+                         <ArrowRightLeft className="w-4.5 h-4.5" />
+                       </button>
+                       <button 
+                         onClick={() => handleDeleteClass(cls.id!)}
+                         className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all active:scale-95 shadow-sm"
+                       >
+                         <Trash2 className="w-4.5 h-4.5" />
+                       </button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
 
-          {/* Change History for today */}
-          <div className="flex flex-col gap-4">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 px-2">
+            {/* Change History for today */}
+            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 px-2 mt-6">
               <Clock className="w-5 h-5 text-orange-500" />
-              오늘의 변경 내역
+              내 관련 변경 내역
             </h3>
             <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
               {changes.length === 0 ? (
-                <div className="p-12 flex flex-col items-center gap-3 text-center">
+                <div className="p-8 flex flex-col items-center gap-3 text-center">
                   <CheckCircle2 className="w-12 h-12 text-slate-100" />
-                  <p className="text-slate-400 font-bold">아직 변경 내역이 없습니다.</p>
+                  <p className="text-slate-400 font-bold text-sm">아직 변경 내역이 없습니다.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
                   {changes.map(chg => (
-                    <div key={chg.id} className="p-5 flex flex-col gap-2">
+                    <div key={chg.id} className="p-4 flex flex-col gap-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md uppercase tracking-tight">
-                          {chg.type === 'SWAP' ? '교체됨' : '보강됨'}
+                        <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded uppercase">
+                          {chg.type === 'SWAP' ? '교체' : '보강'}
                         </span>
-                        <span className="text-[10px] font-bold text-slate-400">{chg.period}교시 / {chg.gradeClass}</span>
+                        <span className="text-[9px] font-bold text-slate-400">{chg.period}교시 / {chg.gradeClass}</span>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <p className="text-sm font-bold text-slate-700 truncate">{chg.originalTeacherName}</p>
-                        <ArrowRightLeft className="w-4 h-4 text-slate-300" />
-                        <p className="text-sm font-black text-brand-600 truncate">{chg.newTeacherName}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-slate-700 truncate">{chg.originalTeacherName}</p>
+                        <ArrowRightLeft className="w-3 h-3 text-slate-300" />
+                        <p className="text-xs font-black text-brand-600 truncate">{chg.newTeacherName}</p>
                       </div>
-                      <p className="text-[11px] font-bold text-slate-400">{chg.subject}</p>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* 2. Status Grid Section (All Teachers) */}
+          <div className="xl:col-span-2 flex flex-col gap-4">
+            <div className="flex items-center justify-between px-2">
+              <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-500" />
+                방과후 수업 일람표
+              </h3>
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full uppercase tracking-wider">Total {Object.keys(userProfiles).length} Teachers</span>
+            </div>
+            
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-100">
+                    <th className="py-4 px-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-100">교사명</th>
+                    <th className="py-4 px-6 text-center text-[11px] font-black text-brand-600 uppercase tracking-widest border-r border-slate-100">8교시</th>
+                    <th className="py-4 px-6 text-center text-[11px] font-black text-indigo-600 uppercase tracking-widest">9교시</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {Object.values(userProfiles)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(teacher => {
+                      const class8 = classes.find(c => c.teacherId === teacher.uid && c.period === 8);
+                      const class9 = classes.find(c => c.teacherId === teacher.uid && c.period === 9);
+                      
+                      return (
+                        <tr key={teacher.uid} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-6 font-black text-slate-700 bg-slate-50/30 border-r border-slate-100">
+                            <div className="flex flex-col">
+                              <span>{teacher.nickname || teacher.name}</span>
+                              {teacher.uid === user?.uid && <span className="text-[9px] text-brand-500 font-bold uppercase mt-0.5">Me</span>}
+                            </div>
+                          </td>
+                          <td className="p-2 border-r border-slate-100 min-w-[140px]">
+                            {class8 ? (
+                              <div 
+                                onClick={() => {
+                                  if (userData.isAdmin || class8.teacherId === user?.uid) {
+                                    setNewClass({ period: class8.period, subject: class8.subject, gradeClass: class8.gradeClass });
+                                    setAdminSelectedTeacherId(class8.teacherId);
+                                    setIsAddModalOpen(true);
+                                  }
+                                }}
+                                className={`group relative border rounded-xl p-2 text-center transition-all ${userData.isAdmin || class8.teacherId === user?.uid ? 'cursor-pointer hover:shadow-md' : ''} ${class8.teacherId === user?.uid ? 'bg-brand-50 border-brand-200' : 'bg-slate-50/50 border-slate-100'}`}
+                              >
+                                <p className={`text-sm font-black leading-tight ${class8.teacherId === user?.uid ? 'text-brand-900' : 'text-slate-700'}`}>{class8.subject}</p>
+                                <p className="text-[10px] font-bold text-slate-400 mt-1">{class8.gradeClass}</p>
+                                {(userData.isAdmin || class8.teacherId === user?.uid) && (
+                                   <div className="absolute inset-0 bg-white/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-xl">
+                                      <Edit2 className="w-3.5 h-3.5 text-brand-600" />
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteClass(class8.id!); }}
+                                        className="p-1 bg-rose-500 text-white rounded-lg shadow-sm"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                   </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div 
+                                onClick={() => {
+                                  if (userData.isAdmin) {
+                                    setNewClass({ period: 8, subject: '', gradeClass: '' });
+                                    setAdminSelectedTeacherId(teacher.uid);
+                                    setIsAddModalOpen(true);
+                                  }
+                                }}
+                                className={`flex justify-center italic text-xs h-10 items-center rounded-xl border border-dashed border-transparent transition-all ${userData.isAdmin ? 'hover:border-slate-300 hover:bg-slate-50 cursor-pointer text-slate-300' : 'text-slate-200'}`}
+                              >
+                                {userData.isAdmin ? <Plus className="w-4 h-4" /> : '-'}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-2 min-w-[140px]">
+                            {class9 ? (
+                              <div 
+                                onClick={() => {
+                                  if (userData.isAdmin || class9.teacherId === user?.uid) {
+                                    setNewClass({ period: class9.period, subject: class9.subject, gradeClass: class9.gradeClass });
+                                    setAdminSelectedTeacherId(class9.teacherId);
+                                    setIsAddModalOpen(true);
+                                  }
+                                }}
+                                className={`group relative border rounded-xl p-2 text-center transition-all ${userData.isAdmin || class9.teacherId === user?.uid ? 'cursor-pointer hover:shadow-md' : ''} ${class9.teacherId === user?.uid ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50/50 border-slate-100'}`}
+                              >
+                                <p className={`text-sm font-black leading-tight ${class9.teacherId === user?.uid ? 'text-indigo-900' : 'text-slate-700'}`}>{class9.subject}</p>
+                                <p className="text-[10px] font-bold text-slate-400 mt-1">{class9.gradeClass}</p>
+                                {(userData.isAdmin || class9.teacherId === user?.uid) && (
+                                   <div className="absolute inset-0 bg-white/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-xl">
+                                      <Edit2 className="w-3.5 h-3.5 text-brand-600" />
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteClass(class9.id!); }}
+                                        className="p-1 bg-rose-500 text-white rounded-lg shadow-sm"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                   </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div 
+                                onClick={() => {
+                                  if (userData.isAdmin) {
+                                    setNewClass({ period: 9, subject: '', gradeClass: '' });
+                                    setAdminSelectedTeacherId(teacher.uid);
+                                    setIsAddModalOpen(true);
+                                  }
+                                }}
+                                className={`flex justify-center italic text-xs h-10 items-center rounded-xl border border-dashed border-transparent transition-all ${userData.isAdmin ? 'hover:border-slate-300 hover:bg-slate-50 cursor-pointer text-slate-300' : 'text-slate-200'}`}
+                              >
+                                {userData.isAdmin ? <Plus className="w-4 h-4" /> : '-'}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -349,6 +481,24 @@ const AfterSchoolPage: React.FC = () => {
               <button onClick={() => setIsAddModalOpen(false)} className="p-2 text-slate-400 hover:bg-white rounded-full"><X className="w-6 h-6" /></button>
             </div>
             <form onSubmit={handleAddClass} className="p-8 space-y-5">
+              {userData.isAdmin && (
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase ml-1">담당 교사 선택</label>
+                  <select 
+                    required
+                    value={adminSelectedTeacherId}
+                    onChange={(e) => setAdminSelectedTeacherId(e.target.value)}
+                    className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold focus:outline-none focus:border-brand-500 transition-all appearance-none"
+                  >
+                    {Object.values(userProfiles)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(p => (
+                        <option key={p.uid} value={p.uid}>{p.nickname || p.name} 선생님</option>
+                      ))
+                    }
+                  </select>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase ml-1">교시 선택</label>
                 <div className="flex gap-2">
