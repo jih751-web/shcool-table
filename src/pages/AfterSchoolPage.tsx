@@ -112,6 +112,23 @@ const AfterSchoolPage: React.FC = () => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [weekClasses, userProfiles]);
 
+  // 교체 모달에서 선택 가능한 '가용 교사' 필터링 (Hook 규칙 준수하여 최상단 배치)
+  const availableTeachersForSwap = React.useMemo(() => {
+    if (!selectedClass) return [];
+    
+    // 해당 날짜, 해당 교시에 이미 수업이 있는 교사 ID 목록 추출
+    const busyTeacherIds = new Set(
+      weekClasses
+        .filter(c => c.date === selectedClass.date && c.period === selectedClass.period)
+        .map(c => c.teacherId)
+    );
+
+    // 전체 가용 교사(가입됨) 중 '이미 수업이 있는 교사'와 '원교사' 제외
+    return Object.values(userProfiles)
+      .filter(p => !busyTeacherIds.has(p.uid) && p.uid !== selectedClass.teacherId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [selectedClass, weekClasses, userProfiles]);
+
   // Derived states for current selected day (used in secondary sections)
   const classes = weekClasses.filter(c => c.date === dateStr);
   const changes = weekChanges.filter(c => c.date === dateStr);
@@ -594,14 +611,26 @@ const AfterSchoolPage: React.FC = () => {
                </div>
                <div className="space-y-2">
                  <label className="text-[11px] font-black text-slate-400 uppercase ml-1">대상 교사</label>
-                 <select required value={swapTargetTeacherId} onChange={(e) => setSwapTargetTeacherId(e.target.value)} className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold focus:border-orange-500 outline-none">
-                   <option value="">교사 선택</option>
-                   {Object.values(userProfiles).filter(p => p.uid !== user?.uid).map(p => (
-                     <option key={p.uid} value={p.uid}>{p.nickname || p.name} 선생님</option>
-                   ))}
+                 <select 
+                    required 
+                    value={swapTargetTeacherId} 
+                    onChange={(e) => setSwapTargetTeacherId(e.target.value)} 
+                    disabled={availableTeachersForSwap.length === 0}
+                    className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold focus:border-orange-500 outline-none disabled:opacity-50 disabled:bg-slate-100"
+                 >
+                   {availableTeachersForSwap.length === 0 ? (
+                     <option value="">교체 가능한 교사가 없습니다</option>
+                   ) : (
+                     <>
+                        <option value="">교사 선택 ({availableTeachersForSwap.length}명 가능)</option>
+                        {availableTeachersForSwap.map(p => (
+                          <option key={p.uid} value={p.uid}>{p.nickname || p.name} 선생님</option>
+                        ))}
+                     </>
+                   )}
                  </select>
                </div>
-               <button type="submit" disabled={isProcessing || !swapTargetTeacherId} className="w-full py-4 bg-orange-500 text-white rounded-2xl font-black shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all mt-4 disabled:opacity-50">{isProcessing ? '처리 중...' : '교체 실행'}</button>
+               <button type="submit" disabled={isProcessing || availableTeachersForSwap.length === 0 || !swapTargetTeacherId} className="w-full py-4 bg-orange-500 text-white rounded-2xl font-black shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all mt-4 disabled:opacity-50">{isProcessing ? '처리 중...' : '교체 실행'}</button>
             </form>
           </div>
         </div>
