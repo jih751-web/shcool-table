@@ -22,6 +22,13 @@ import {
 import Header from '../components/Header';
 import type { AfterSchoolClass, AfterSchoolChange } from '../types';
 
+const Loader2 = ({ className }: { className?: string }) => (
+  <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
+
 const AfterSchoolPage: React.FC = () => {
   const { user, userData, userProfiles } = useAuth();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -53,15 +60,6 @@ const AfterSchoolPage: React.FC = () => {
   }, [user]);
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
-
-  // Guard for null userData
-  if (!user || !userData) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
-      </div>
-    );
-  }
 
   // Fetch ALL Classes for Selected Date (to support Status Grid)
   useEffect(() => {
@@ -108,6 +106,15 @@ const AfterSchoolPage: React.FC = () => {
     });
     return () => unsubscribe();
   }, [dateStr, user, userData]);
+
+  // Guard for null userData - Moved AFTER all Hooks
+  if (!user || !userData) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
+      </div>
+    );
+  }
 
   const handleAddClass = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -613,11 +620,5 @@ const AfterSchoolPage: React.FC = () => {
   );
 };
 
-const Loader2 = ({ className }: { className?: string }) => (
-  <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-  </svg>
-);
 
 export default AfterSchoolPage;

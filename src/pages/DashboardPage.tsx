@@ -532,8 +532,7 @@ export default function DashboardPage() {
     setIsModalOpen(true);
   };
 
-
-  // Safety Wrapper: 브라우저 환경이 준비되기 전에는 아무것도 렌더링하지 않음
+  // Safety Wrapper: Moved AFTER all logic and hooks
   if (!isMounted) return null;
 
   return (
