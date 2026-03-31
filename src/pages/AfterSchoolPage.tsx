@@ -104,6 +104,14 @@ const AfterSchoolPage: React.FC = () => {
     return () => unsubscribe();
   }, [JSON.stringify(weekDates), user, userData]);
 
+  // 해당 주간에 수업이 있는 교사만 필터링 (Hook 규칙 준수하여 최상단 배치)
+  const activeTeachers = React.useMemo(() => {
+    const activeIds = new Set(weekClasses.map(c => c.teacherId));
+    return Object.values(userProfiles)
+      .filter(p => activeIds.has(p.uid))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [weekClasses, userProfiles]);
+
   // Derived states for current selected day (used in secondary sections)
   const classes = weekClasses.filter(c => c.date === dateStr);
   const changes = weekChanges.filter(c => c.date === dateStr);
@@ -294,7 +302,7 @@ const AfterSchoolPage: React.FC = () => {
               <Users className="w-8 h-8 text-brand-600" />
               교과방과후 관리
             </h2>
-            <p className="text-slate-500 font-bold mt-1">방과후 수업 일정을 주간 단위로 확인하고 교체할 수 있습니다.</p>
+            <p className="text-slate-500 font-bold mt-1 text-xs">8, 9교시 방과후 수업 일정을 주간 단위로 확인하고 교체할 수 있습니다. (수업이 있는 교사만 표시)</p>
           </div>
           <button 
             onClick={() => setIsAddModalOpen(true)}
@@ -333,92 +341,130 @@ const AfterSchoolPage: React.FC = () => {
         )}
 
         {/* Weekly View Toggle & Navigation */}
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 mb-8 flex flex-col items-center gap-4">
-          <div className="flex items-center gap-8">
-            <button onClick={() => setSelectedDate(prev => addDays(prev, -7))} className="p-3 bg-slate-100 rounded-2xl text-slate-400 hover:bg-brand-50 hover:text-brand-600 transition-all">
-              <ChevronLeft className="w-6 h-6" />
+        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-4 mb-6 flex flex-col items-center gap-4">
+          <div className="flex items-center gap-6">
+            <button onClick={() => setSelectedDate(prev => addDays(prev, -7))} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:bg-brand-50 hover:text-brand-600 transition-all">
+              <ChevronLeft className="w-5 h-5" />
             </button>
             <div className="text-center">
-              <p className="text-[10px] font-black text-brand-600 tracking-[0.2em] uppercase mb-1">WEEKLY MATRIX</p>
-              <h3 className="text-2xl font-black text-slate-800">
+              <p className="text-[9px] font-black text-brand-600 tracking-[0.2em] uppercase mb-0.5">WEEKLY MATRIX</p>
+              <h3 className="text-xl font-black text-slate-800">
                 {format(addDays(monday, 0), 'M월 d일')} ~ {format(addDays(monday, 4), 'M월 d일')}
               </h3>
             </div>
-            <button onClick={() => setSelectedDate(prev => addDays(prev, 7))} className="p-3 bg-slate-100 rounded-2xl text-slate-400 hover:bg-brand-50 hover:text-brand-600 transition-all">
-              <ChevronRight className="w-6 h-6" />
+            <button onClick={() => setSelectedDate(prev => addDays(prev, 7))} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:bg-brand-50 hover:text-brand-600 transition-all">
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* 주간 그리드 현황판 */}
         <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden mb-12">
-            <div className="p-8 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-                  <Calendar className="w-7 h-7 text-brand-600" />
+            <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-brand-600" />
                   주간 방과후 시간표 현황
                 </h3>
-                <div className="flex items-center gap-2">
-                   <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
-                   <span className="text-xs font-bold text-slate-500">교체된 수업</span>
+                <div className="flex items-center gap-3">
+                   <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 bg-indigo-500 rounded-sm"></div>
+                      <span className="text-[10px] font-bold text-slate-500">교체됨</span>
+                   </div>
+                   <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 bg-brand-500 rounded-sm"></div>
+                      <span className="text-[10px] font-bold text-slate-500">정상</span>
+                   </div>
                 </div>
             </div>
             <div className="overflow-x-auto">
-               <table className="w-full border-collapse">
+               <table className="w-full border-collapse table-fixed min-w-[800px]">
                   <thead>
-                     <tr className="bg-white">
-                        <th className="py-5 px-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-50 sticky left-0 bg-white z-10 w-[120px]">교사명</th>
+                     <tr className="bg-white border-b border-slate-100">
+                        <th rowSpan={2} className="py-2 px-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-100 sticky left-0 bg-white z-10 w-[100px]">교사명</th>
                         {[0, 1, 2, 3, 4].map(idx => {
                           const d = addDays(monday, idx);
                           return (
-                            <th key={idx} className="py-5 px-4 text-center border-r border-slate-50 min-w-[180px]">
-                               <p className="text-[10px] font-black tracking-widest uppercase text-slate-400">{format(d, 'E', { locale: ko })}</p>
-                               <p className="text-lg font-black text-slate-700">{format(d, 'd일')}</p>
+                            <th key={idx} colSpan={2} className="py-2 px-1 text-center border-r border-slate-100 bg-slate-50/50">
+                               <p className="text-[9px] font-black tracking-widest uppercase text-slate-400">{format(d, 'E', { locale: ko })}</p>
+                               <p className="text-xs font-black text-slate-700 leading-none">{format(d, 'd일')}</p>
                             </th>
                           );
                         })}
                      </tr>
+                     <tr className="bg-white border-b border-slate-100">
+                        {[0, 1, 2, 3, 4].map(idx => (
+                          <React.Fragment key={idx}>
+                            <th className="py-1 text-center text-[9px] font-black text-brand-600/60 uppercase border-r border-slate-50 w-[70px]">8교시</th>
+                            <th className="py-1 text-center text-[9px] font-black text-indigo-600/60 uppercase border-r border-slate-100 w-[70px]">9교시</th>
+                          </React.Fragment>
+                        ))}
+                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                     {Object.values(userProfiles)
-                       .sort((a, b) => a.name.localeCompare(b.name))
-                       .map(teacher => (
+                     {activeTeachers.map(teacher => (
                          <tr key={teacher.uid} className="hover:bg-slate-50/30 transition-colors group">
-                            <td className="py-6 px-6 font-black text-slate-700 border-r border-slate-50 sticky left-0 bg-white group-hover:bg-slate-50 z-10">
-                               {teacher.nickname || teacher.name}
+                            <td className="py-2 px-3 font-black text-slate-700 border-r border-slate-100 sticky left-0 bg-white group-hover:bg-slate-50 z-10 text-[11px] truncate">
+                               <div className="flex items-center justify-between">
+                                 <span>{teacher.nickname || teacher.name}</span>
+                                 {teacher.uid === user?.uid && <span className="text-[8px] text-brand-500 font-bold border border-brand-200 px-1 rounded-sm">ME</span>}
+                               </div>
                             </td>
                             {[0, 1, 2, 3, 4].map(idx => {
                                const dateKey = weekDates[idx];
                                const dayClasses = weekClasses.filter(c => c.teacherId === teacher.uid && c.date === dateKey);
+                               
                                return (
-                                 <td key={idx} className="p-3 border-r border-slate-50 align-top">
-                                    <div className="flex flex-col gap-2">
-                                       {[8, 9].map(p => {
-                                          const cls = dayClasses.find(c => c.period === p);
-                                          const isChanged = weekChanges.some(chg => chg.date === dateKey && chg.period === p && (chg.originalTeacherId === teacher.uid || chg.newTeacherId === teacher.uid));
-                                          if (!cls) return <div key={p} className="h-12 border border-dashed border-slate-100 opacity-20 rounded-xl"></div>;
-                                          return (
-                                            <div 
-                                              key={p}
-                                              onClick={() => {
-                                                 if (userData.isAdmin || cls.teacherId === user.uid) {
-                                                   setSelectedClass(cls);
-                                                   setIsSwapModalOpen(true);
-                                                 }
-                                              }}
-                                              className={`relative p-3 rounded-2xl border-2 transition-all cursor-pointer shadow-sm active:scale-95
-                                                ${isChanged ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-brand-50 hover:border-brand-200'}`}
-                                            >
-                                               <div className="flex items-center justify-between mb-1">
-                                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${isChanged ? 'bg-indigo-500 text-white' : 'bg-brand-100 text-brand-700'}`}>{p}교시</span>
-                                                  {isChanged && <ArrowRightLeft className="w-2.5 h-2.5 text-indigo-500" />}
-                                               </div>
-                                               <p className="text-[12px] font-black text-slate-800 truncate">{cls.subject}</p>
-                                               <p className="text-[10px] font-bold text-slate-400 mt-0.5">{cls.gradeClass}</p>
-                                            </div>
-                                          );
-                                       })}
-                                    </div>
-                                 </td>
+                                 <React.Fragment key={idx}>
+                                   {/* 8교시 Cell */}
+                                   <td className="p-1 border-r border-slate-50 align-top">
+                                      {(() => {
+                                        const cls = dayClasses.find(c => c.period === 8);
+                                        const isChanged = weekChanges.some(chg => chg.date === dateKey && chg.period === 8 && (chg.originalTeacherId === teacher.uid || chg.newTeacherId === teacher.uid));
+                                        
+                                        if (!cls) return <div className="h-full min-h-[36px] bg-slate-50/30 rounded-lg"></div>;
+                                        
+                                        return (
+                                          <div 
+                                            onClick={() => {
+                                               if (userData.isAdmin || cls.teacherId === user.uid) {
+                                                 setSelectedClass(cls);
+                                                 setIsSwapModalOpen(true);
+                                               }
+                                            }}
+                                            className={`h-full min-h-[36px] p-1.5 rounded-xl border transition-all cursor-pointer shadow-sm active:scale-95 flex flex-col justify-center
+                                              ${isChanged ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-brand-50 hover:border-brand-200'}`}
+                                          >
+                                             <p className="text-[10px] font-black text-slate-800 leading-tight truncate">{cls.subject}</p>
+                                             <p className="text-[8px] font-bold text-slate-400 mt-0.5 leading-none">{cls.gradeClass}</p>
+                                          </div>
+                                        );
+                                      })()}
+                                   </td>
+                                   {/* 9교시 Cell */}
+                                   <td className="p-1 border-r border-slate-100 align-top">
+                                      {(() => {
+                                        const cls = dayClasses.find(c => c.period === 9);
+                                        const isChanged = weekChanges.some(chg => chg.date === dateKey && chg.period === 9 && (chg.originalTeacherId === teacher.uid || chg.newTeacherId === teacher.uid));
+                                        
+                                        if (!cls) return <div className="h-full min-h-[36px] bg-slate-50/30 rounded-lg"></div>;
+                                        
+                                        return (
+                                          <div 
+                                            onClick={() => {
+                                               if (userData.isAdmin || cls.teacherId === user.uid) {
+                                                 setSelectedClass(cls);
+                                                 setIsSwapModalOpen(true);
+                                               }
+                                            }}
+                                            className={`h-full min-h-[36px] p-1.5 rounded-xl border transition-all cursor-pointer shadow-sm active:scale-95 flex flex-col justify-center
+                                              ${isChanged ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-brand-50 hover:border-brand-200'}`}
+                                          >
+                                             <p className="text-[10px] font-black text-indigo-800 leading-tight truncate">{cls.subject}</p>
+                                             <p className="text-[8px] font-bold text-slate-400 mt-0.5 leading-none">{cls.gradeClass}</p>
+                                          </div>
+                                        );
+                                      })()}
+                                   </td>
+                                 </React.Fragment>
                                );
                             })}
                          </tr>
