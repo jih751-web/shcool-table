@@ -118,6 +118,26 @@ const AfterSchoolPage: React.FC = () => {
     return () => unsubscribe();
   }, [dateStr, user, userData]);
 
+  // 교체 관리용 수업 데이터 실시간 구독
+  useEffect(() => {
+    const swapDateStr = format(swapDate, 'yyyy-MM-dd');
+    const q = query(
+      collection(db, 'afterSchoolClasses'),
+      where('date', '==', swapDateStr)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items: AfterSchoolClass[] = [];
+      snapshot.forEach(docSnap => {
+        items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass);
+      });
+      items.sort((a, b) => a.period - b.period);
+      setSwapClasses(items);
+    });
+
+    return () => unsubscribe();
+  }, [swapDate]);
+
   // Guard for null userData - Moved AFTER all Hooks
   if (!user || !userData) {
     return (
@@ -227,25 +247,6 @@ const AfterSchoolPage: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
-  // 교체 관리용 수업 데이터 실시간 구독
-  useEffect(() => {
-    const swapDateStr = format(swapDate, 'yyyy-MM-dd');
-    const q = query(
-      collection(db, 'afterSchoolClasses'),
-      where('date', '==', swapDateStr)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items: AfterSchoolClass[] = [];
-      snapshot.forEach(docSnap => {
-        items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass);
-      });
-      items.sort((a, b) => a.period - b.period);
-      setSwapClasses(items);
-    });
-
-    return () => unsubscribe();
-  }, [swapDate]);
 
   const handleAddClass = async (e: React.FormEvent) => {
     e.preventDefault();
