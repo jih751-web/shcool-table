@@ -12,11 +12,8 @@ import {
   ArrowRightLeft, 
   Trash2, 
   X, 
-  AlertCircle,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  UserPlus,
   Download,
   ClipboardCheck
 } from 'lucide-react';
@@ -36,7 +33,6 @@ const AfterSchoolPage: React.FC = () => {
   
   // Date and Fetching States
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [loading, setLoading] = useState(true);
   const [weekClasses, setWeekClasses] = useState<AfterSchoolClass[]>([]);
   const [weekChanges, setWeekChanges] = useState<AfterSchoolChange[]>([]);
   
@@ -85,7 +81,6 @@ const AfterSchoolPage: React.FC = () => {
         items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass);
       });
       setWeekClasses(items);
-      setLoading(false);
     });
     return () => unsubscribe();
   }, [JSON.stringify(weekDates), user, userData]);
