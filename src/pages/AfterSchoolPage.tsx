@@ -12,14 +12,16 @@ import {
   ArrowRightLeft, 
   Trash2, 
   X, 
-  AlertCircle, 
+  AlertCircle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   UserPlus,
   Edit2,
   Download,
-  ClipboardCheck
+  ClipboardCheck,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import Header from '../components/Header';
 import type { AfterSchoolClass, AfterSchoolChange } from '../types';
@@ -56,6 +58,10 @@ const AfterSchoolPage: React.FC = () => {
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isStatusGridOpen, setIsStatusGridOpen] = useState(false);
+  const [swapDate, setSwapDate] = useState<Date>(new Date());
+  const [swapClasses, setSwapClasses] = useState<AfterSchoolClass[]>([]);
+  const [swapFormStates, setSwapFormStates] = useState<Record<string, { targetId: string; reason: string }>>({});
 
   // Initialize adminSelectedTeacherId when user is available
   useEffect(() => {
@@ -192,7 +198,7 @@ const AfterSchoolPage: React.FC = () => {
                 batch.set(docRef, {
                    date: dateParsed,
                    period,
-                   teacher: teacherName,
+                   teacherName: teacherName,
                    teacherId,
                    subject: String(subject).trim(),
                    gradeClass: String(classInfo).trim(),
@@ -220,6 +226,26 @@ const AfterSchoolPage: React.FC = () => {
     };
     reader.readAsBinaryString(file);
   };
+
+  // 교체 관리용 수업 데이터 실시간 구독
+  useEffect(() => {
+    const swapDateStr = format(swapDate, 'yyyy-MM-dd');
+    const q = query(
+      collection(db, 'afterSchoolClasses'),
+      where('date', '==', swapDateStr)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items: AfterSchoolClass[] = [];
+      snapshot.forEach(docSnap => {
+        items.push({ id: docSnap.id, ...docSnap.data() } as AfterSchoolClass);
+      });
+      items.sort((a, b) => a.period - b.period);
+      setSwapClasses(items);
+    });
+
+    return () => unsubscribe();
+  }, [swapDate]);
 
   const handleAddClass = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -319,6 +345,68 @@ const AfterSchoolPage: React.FC = () => {
 
       alert('교체가 완료되었습니다.');
       setIsSwapModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert('교체 실패');
+    }
+  };
+
+  const handleListSwap = async (cls: AfterSchoolClass) => {
+    const formData = swapFormStates[cls.id!];
+    if (!formData?.targetId || !user) {
+      alert('대상 교사를 선택해 주세요.');
+      return;
+    }
+
+    setIsProcessing(true);
+    const swapDateStr = format(swapDate, 'yyyy-MM-dd');
+    try {
+      // 1. 중복 검증
+      const q = query(
+        collection(db, 'afterSchoolClasses'),
+        where('date', '==', swapDateStr),
+        where('period', '==', cls.period),
+        where('teacherId', '==', formData.targetId)
+      );
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        alert('해당 교사는 이미 해당 교시에 수업이 있습니다.');
+        setIsProcessing(false);
+        return;
+      }
+
+      const targetTeacher = Object.values(userProfiles).find(p => p.uid === formData.targetId);
+      
+      // 2. 기록 생성
+      await addDoc(collection(db, 'afterSchoolChanges'), {
+        date: swapDateStr,
+        period: cls.period,
+        originalTeacherId: cls.teacherId,
+        originalTeacherName: cls.teacherName,
+        newTeacherId: formData.targetId,
+        newTeacherName: targetTeacher?.nickname || targetTeacher?.name || '선생님',
+        subject: cls.subject,
+        gradeClass: cls.gradeClass,
+        type: 'SWAP',
+        reason: formData.reason || '',
+        status: 'APPROVED',
+        createdAt: serverTimestamp()
+      });
+
+      // 3. 업데이트
+      await updateDoc(doc(db, 'afterSchoolClasses', cls.id!), {
+        teacherId: formData.targetId,
+        teacherName: targetTeacher?.nickname || targetTeacher?.name || '선생님'
+      });
+
+      alert('교체가 완료되었습니다.');
+      // 폼 초기화
+      setSwapFormStates(prev => {
+        const next = { ...prev };
+        delete next[cls.id!];
+        return next;
+      });
     } catch (err) {
       console.error(err);
       alert('교체 실패');
@@ -502,18 +590,25 @@ const AfterSchoolPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. Status Grid Section (All Teachers) */}
+          {/* 2. Status Grid Section (All Teachers) - Toggleable */}
           <div className="xl:col-span-2 flex flex-col gap-4">
             <div className="flex items-center justify-between px-2">
               <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-500" />
                 방과후 수업 일람표
               </h3>
-              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full uppercase tracking-wider">Total {Object.keys(userProfiles).length} Teachers</span>
+              <button 
+                onClick={() => setIsStatusGridOpen(!isStatusGridOpen)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-black transition-all"
+              >
+                {isStatusGridOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {isStatusGridOpen ? '일람표 접기' : '현황판 열어서 보기'}
+              </button>
             </div>
             
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
-              <table className="w-full border-collapse">
+            {isStatusGridOpen && (
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto animate-in fade-in slide-in-from-top-2 duration-300">
+                <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-100">
                     <th className="py-4 px-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-100">교사명</th>
@@ -623,6 +718,102 @@ const AfterSchoolPage: React.FC = () => {
                     })}
                 </tbody>
               </table>
+            </div>
+            )}
+
+            {/* 3. After-School Swap Management Section */}
+            <div className="mt-8">
+               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4 px-2">
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                    <ArrowRightLeft className="w-5 h-5 text-orange-500" />
+                    방과후 시간표 교체 관리
+                  </h3>
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                    <Calendar className="w-4 h-4 text-slate-400" />
+                    <input 
+                      type="date" 
+                      value={format(swapDate, 'yyyy-MM-dd')}
+                      onChange={(e) => setSwapDate(new Date(e.target.value))}
+                      className="text-xs font-bold text-slate-700 bg-transparent outline-none"
+                    />
+                  </div>
+               </div>
+
+               <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
+                  {swapClasses.length === 0 ? (
+                    <div className="p-12 text-center flex flex-col items-center gap-3">
+                      <AlertCircle className="w-10 h-10 text-slate-200" />
+                      <p className="text-slate-400 font-bold">해당 날짜에 등록된 수업이 없습니다.</p>
+                    </div>
+                  ) : (
+                    swapClasses.map(cls => {
+                      const canEdit = userData?.isAdmin || cls.teacherId === user?.uid;
+                      const currentForm = swapFormStates[cls.id!] || { targetId: '', reason: '' };
+
+                      return (
+                        <div key={cls.id} className="p-6 hover:bg-slate-50/50 transition-colors">
+                           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                              {/* Class Info */}
+                              <div className="flex items-center gap-4 min-w-[250px]">
+                                 <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black ${cls.period === 8 ? 'bg-brand-50 text-brand-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                                    <span className="text-sm">{cls.period}</span>
+                                    <span className="text-[9px] uppercase">교시</span>
+                                 </div>
+                                 <div>
+                                    <h4 className="text-[17px] font-black text-slate-800 tracking-tight">{cls.subject}</h4>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{cls.gradeClass}</span>
+                                      <span className="text-xs font-bold text-slate-400">|</span>
+                                      <span className="text-xs font-black text-slate-600">{cls.teacherName} 선생님</span>
+                                    </div>
+                                 </div>
+                              </div>
+
+                              {/* Action Form */}
+                              {canEdit ? (
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                   <select 
+                                     value={currentForm.targetId}
+                                     onChange={(e) => setSwapFormStates(prev => ({ ...prev, [cls.id!]: { ...currentForm, targetId: e.target.value } }))}
+                                     className="px-4 py-2 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold focus:border-orange-500 outline-none transition-all appearance-none"
+                                   >
+                                      <option value="">교체 대상 교사 선택</option>
+                                      {Object.values(userProfiles)
+                                        .filter(p => p.uid !== cls.teacherId)
+                                        .sort((a,b) => a.name.localeCompare(b.name))
+                                        .map(p => (
+                                          <option key={p.uid} value={p.uid}>{p.nickname || p.name} 선생님</option>
+                                        ))
+                                      }
+                                   </select>
+                                   <input 
+                                     type="text"
+                                     placeholder="교체 사유 (선택)"
+                                     value={currentForm.reason}
+                                     onChange={(e) => setSwapFormStates(prev => ({ ...prev, [cls.id!]: { ...currentForm, reason: e.target.value } }))}
+                                     className="px-4 py-2 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold focus:border-orange-500 outline-none transition-all"
+                                   />
+                                   <button 
+                                     onClick={() => handleListSwap(cls)}
+                                     disabled={isProcessing || !currentForm.targetId}
+                                     className="px-4 py-2 bg-orange-500 text-white rounded-xl text-sm font-black shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50"
+                                   >
+                                      {isProcessing ? '처리중' : '교체 실행'}
+                                   </button>
+                                </div>
+                              ) : (
+                                <div className="flex-1 flex justify-end">
+                                   <span className="px-4 py-2 bg-slate-50 text-slate-400 rounded-xl text-xs font-bold border border-slate-100">
+                                      교능 권한이 없습니다
+                                   </span>
+                                </div>
+                              )}
+                           </div>
+                        </div>
+                      );
+                    })
+                  )}
+               </div>
             </div>
           </div>
         </div>
