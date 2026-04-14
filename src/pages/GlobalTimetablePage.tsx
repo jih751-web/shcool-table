@@ -71,12 +71,23 @@ const GlobalTimetablePage: React.FC = () => {
   }, [currentDate]);
 
   const handleCellClick = async (timetable: Timetable, day: string, period: number, slot?: ClassSlot) => {
+    console.log("[GlobalTimetable] Cell clicked:", { teacher: timetable.teacherName, day, period, slot });
     if (processing) return;
+
+    // 실시간 변동 내역을 반영한 현재 상태 확인 (UI 렌더링 로직과 동기화)
+    const dateOfCell = format(addDays(weekStartsOn, DAYS.indexOf(day)), 'yyyy-MM-dd');
+    const cellOverrides = timetableOverrides.filter(ov => ov.date === dateOfCell && ov.period === period);
+    const myInOv = cellOverrides.find(ov => ov.newTeacherId === timetable.id);
+    const myOutOv = cellOverrides.find(ov => ov.originalTeacherId === timetable.id);
+    
+    const currentSubject = myInOv ? myInOv.subject : (myOutOv ? '' : slot?.subject);
+    const currentGradeClass = myInOv ? myInOv.gradeClass : (myOutOv ? '' : slot?.gradeClass);
 
     // 1. 첫 번째 선택 (내 수업이어야 함)
     if (!selection) {
       if (timetable.id === user?.uid) {
-        if (!slot?.subject) {
+        // [수정] 원본 수업이 있었던 자리라면 현재 공강(교체됨) 상태라도 선택 가능하게 함
+        if (!slot?.subject && !currentSubject) {
           alert('원본 수업이 있는 셀을 선택해주세요.');
           return;
         }
@@ -84,7 +95,7 @@ const GlobalTimetablePage: React.FC = () => {
           teacherId: timetable.id,
           dayOfWeek: day,
           period,
-          subject: slot.subject
+          subject: currentSubject || slot?.subject || ''
         });
       } else {
         alert('먼저 본인의 수업 중 하나를 선택해주세요.');
@@ -105,13 +116,13 @@ const GlobalTimetablePage: React.FC = () => {
        return;
     }
 
-    if (!slot?.subject) {
+    if (!currentSubject) {
       alert('상대방의 수업이 있는 셀을 선택해주세요.');
       setSelection(null);
       return;
     }
 
-    const confirmMsg = `[내 수업] ${selection.dayOfWeek}(${selection.period}) ${selection.subject}\n[상대 수업] ${day}(${period}) ${slot.subject}\n\n위 두 수업을 상호 공강 조건에 맞춰 교체하시겠습니까?`;
+    const confirmMsg = `[내 수업] ${selection.dayOfWeek}(${selection.period}) ${selection.subject}\n[상대 수업] ${day}(${period}) ${currentSubject}\n\n위 두 수업을 상호 공강 조건에 맞춰 교체하시겠습니까?`;
     
     if (window.confirm(confirmMsg)) {
       setProcessing(true);

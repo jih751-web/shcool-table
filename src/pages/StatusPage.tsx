@@ -6,14 +6,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Clock, CheckCircle2, XCircle, Loader2, ArrowRightLeft } from 'lucide-react';
 import Header from '../components/Header';
-import { executeRollbackTransaction } from '../utils/timetableApi';
+import { executeRollbackTransaction, executeAfterSchoolRollback } from '../utils/timetableApi';
 
 const StatusPage: React.FC = () => {
   const { user, userData, userProfiles } = useAuth();
-  const [records, setRecords] = useState<ReplacementRecord[]>([]);
+  const [records, setRecords] = useState<any[]>([]);
   const [filter, setFilter] = useState<'all' | 'mine'>('all');
   const [loading, setLoading] = useState(true);
   const [rollbackLoading, setRollbackLoading] = useState<string | null>(null);
+  
+  // Custom Confirm Modal States
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [recordToRollback, setRecordToRollback] = useState<any>(null);
 
   const fetchRecords = async () => {
     setLoading(true);
@@ -42,11 +46,16 @@ const StatusPage: React.FC = () => {
         });
       });
 
-      // 통합 정렬
+      // 통합 정렬 (Firebase Timestamp 객체와 ISO 문자열 혼용 대응)
       data.sort((a, b) => {
-        const timeA = a.timestamp?.seconds || new Date(a.timestamp || 0).getTime();
-        const timeB = b.timestamp?.seconds || new Date(b.timestamp || 0).getTime();
-        return timeB - timeA;
+        const getTime = (val: any) => {
+          if (!val) return 0;
+          if (typeof val === 'object' && val.seconds !== undefined) return val.seconds * 1000;
+          if (typeof val === 'object' && val.toDate) return val.toDate().getTime();
+          const d = new Date(val);
+          return isNaN(d.getTime()) ? 0 : d.getTime();
+        };
+        return getTime(b.timestamp) - getTime(a.timestamp);
       });
 
       setRecords(data);
@@ -60,7 +69,7 @@ const StatusPage: React.FC = () => {
     fetchRecords();
   }, []);
 
-  const handleRollback = async (record: ReplacementRecord) => {
+  const openRollbackConfirm = (record: any) => {
     const isMine = record.requestorId === user?.uid || record.targetId === user?.uid;
     const isAdmin = userData?.isAdmin === true;
 
@@ -68,18 +77,33 @@ const StatusPage: React.FC = () => {
       alert("본인의 교체 건만 취소할 수 있습니다.");
       return;
     }
+    
+    setRecordToRollback(record);
+    setIsConfirmOpen(true);
+  };
 
-    if (!window.confirm("이 시간표 변동 건을 취소하고 원래대로 되돌리시겠습니까?")) return;
-
+  const handleRollback = async () => {
+    if (!recordToRollback) return;
+    const record = recordToRollback;
+    
+    setIsConfirmOpen(false);
     setRollbackLoading(record.id!);
+    
     try {
-      await executeRollbackTransaction(record.id!);
+      if (record.recordType === 'AFTER_SCHOOL') {
+        await executeAfterSchoolRollback(record.id!);
+      } else {
+        await executeRollbackTransaction(record.id!);
+      }
+      
       alert('성공적으로 원상 복구되었습니다.');
       fetchRecords(); 
     } catch (error: any) {
-      alert(`복구 실패: ${error.message}`);
+      console.error("[DEBUG] Rollback failed:", error);
+      alert(`복구 처리 중 오류가 발생했습니다: ${error.message}`);
     } finally {
       setRollbackLoading(null);
+      setRecordToRollback(null);
     }
   };
 
@@ -202,21 +226,22 @@ const StatusPage: React.FC = () => {
                         <td className="py-4 px-6 text-right">
                            {(isMine || userData?.isAdmin) && record.status === 'APPROVED' && (
                              <button 
-                               onClick={() => handleRollback(record)}
+                               onClick={() => openRollbackConfirm(record)}
                                disabled={rollbackLoading === record.id}
-                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all
+                               className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 float-right
                                  ${rollbackLoading === record.id 
                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                                   : 'bg-white border-2 border-slate-200 text-slate-500 hover:border-red-500 hover:text-red-600 active:scale-95 shadow-sm'
-                                 }
-                               `}
+                                   : 'bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white shadow-sm hover:shadow-md active:scale-95'
+                                 }`}
                              >
-                                {rollbackLoading === record.id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                  <XCircle className="w-3.5 h-3.5" />
-                                )}
-                                취소
+                               {rollbackLoading === record.id ? (
+                                 <>
+                                   <Loader2 className="w-3 h-3 animate-spin" />
+                                   처리 중
+                                 </>
+                               ) : (
+                                 '취소'
+                               )}
                              </button>
                            )}
                         </td>
@@ -225,15 +250,61 @@ const StatusPage: React.FC = () => {
                   })}
                 </tbody>
               </table>
-              {filteredRecords.length === 0 && (
-                <div className="text-center py-12 text-slate-500 border-t border-slate-100">
-                  조건에 해당하는 교체 내역이 없습니다.
-                </div>
-              )}
             </div>
           )}
         </div>
       </main>
+
+      {/* Custom Confirmation Modal */}
+      {isConfirmOpen && recordToRollback && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 bg-rose-50 border-b border-rose-100 text-center relative overflow-hidden">
+               <div className="absolute -right-4 -top-4 w-24 h-24 bg-rose-200/30 rounded-full blur-2xl"></div>
+               <div className="relative z-10 w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 text-rose-500">
+                 <XCircle className="w-8 h-8" />
+               </div>
+               <h3 className="text-xl font-black text-slate-800 tracking-tight relative z-10">변동 사항 취소</h3>
+               <p className="text-xs text-rose-600 font-bold mt-1 opacity-80 relative z-10 uppercase tracking-widest">Rollback Confirmation</p>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-2">
+                 <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                    <span>대상 정보</span>
+                    <span className="bg-white px-2 py-0.5 rounded-full shadow-xs">{recordToRollback.recordType === 'AFTER_SCHOOL' ? '교과방과후' : '교과수업'}</span>
+                 </div>
+                 <div className="text-sm font-bold text-slate-700">
+                    {recordToRollback.sourceDate} {recordToRollback.sourcePeriod}교시 {recordToRollback.subject}
+                 </div>
+                 <div className="text-[11px] font-medium text-slate-500 flex items-center gap-1">
+                    <ArrowRightLeft className="w-3 h-3" /> {recordToRollback.requestorName} → {recordToRollback.targetName}
+                 </div>
+              </div>
+
+              <p className="text-sm font-bold text-slate-500 text-center px-2 leading-relaxed">
+                정말로 이 변동 사항을 취소하고<br/>
+                <span className="text-slate-800 font-black">원래 시간표대로 복구하시겠습니까?</span>
+              </p>
+
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={handleRollback}
+                  className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black shadow-lg shadow-rose-200 hover:bg-rose-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  취소 및 복구 실행
+                </button>
+                <button 
+                  onClick={() => setIsConfirmOpen(false)}
+                  className="w-full py-3 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  창 닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

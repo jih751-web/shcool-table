@@ -515,12 +515,19 @@ export default function DashboardPage() {
   const isWeekend = dayOfWeekStr === '토' || dayOfWeekStr === '일';
 
   const handleCardClick = (slot: ClassSlot) => {
-    if (!slot.subject) return; // 공강은 교체 불가
+    console.log("[Dashboard] Card clicked:", slot);
+    if (!slot) {
+      console.warn("[Dashboard] Slot data is missing");
+      return;
+    }
+    
+    // [수정] 공강(교환되어 나간 자리)이라도 본인의 슬롯이면 교체 모달을 열 수 있어야 함
+    // 원본 과목 정보가 없는 경우를 위해 보완 로직 필요할 수 있으나, 일단 클릭은 허용
     setSelectedSlot({
         date: currentDateStr,
         dayOfWeek: dayOfWeekStr,
         period: slot.period,
-        subject: slot.subject,
+        subject: slot.subject || '(공강/교체됨)', 
         gradeClass: slot.gradeClass || ''
     });
     setIsChoiceOpen(true);

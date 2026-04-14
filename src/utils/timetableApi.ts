@@ -373,6 +373,53 @@ export const executeRollbackTransaction = async (recordId: string) => {
   });
 };
 
+export const executeAfterSchoolRollback = async (recordId: string) => {
+  console.log("[API] Rollback requested for AfterSchool record:", recordId);
+  const recordRef = doc(db, 'afterSchoolChanges', recordId);
+
+  return await runTransaction(db, async (transaction) => {
+    // 1. 교체 기록 읽기
+    const recordSnap = await transaction.get(recordRef);
+    if (!recordSnap.exists()) throw new Error("해당 방과후 교체 내역이 존재하지 않습니다.");
+    const record = recordSnap.data() as any;
+    const { date, period, originalTeacherId, originalTeacherName, newTeacherId } = record;
+
+    // 2. 방과후 수업(AfterSchoolClass) 문서 찾기 (ID 규칙: date_period_newTeacherId)
+    // 현재 수업의 주인은 newTeacherId로 바뀐 상태임
+    const classId = `${date}_${period}_${newTeacherId}`;
+    const classRef = doc(db, 'afterSchoolClasses', classId);
+    const classSnap = await transaction.get(classRef);
+    
+    if (!classSnap.exists()) {
+      throw new Error("대상 방과후 수업 문서를 찾을 수 없습니다. (이미 삭제되었거나 ID 불일치)");
+    }
+
+    // 3. 원상 복구 로직 (담당 교사를 원래대로 되돌림)
+    // 주의: afterSchoolClasses의 문서는 ID 자체가 'teacherId'를 포함함. 
+    // 담당자가 바뀌면 문서 ID도 바뀌어야 하므로 새 문서를 만들고 기존 문서를 삭제해야 함.
+    const newClassId = `${date}_${period}_${originalTeacherId}`;
+    const newClassRef = doc(db, 'afterSchoolClasses', newClassId);
+    
+    transaction.set(newClassRef, {
+      ...classSnap.data(),
+      teacherId: originalTeacherId,
+      teacherName: originalTeacherName,
+      updatedAt: serverTimestamp()
+    });
+    
+    transaction.delete(classRef);
+
+    // 4. 관련 timetable_overrides 문서 삭제
+    const ovId = `${date}_${period}_${originalTeacherId}`;
+    transaction.delete(doc(db, 'timetable_overrides', ovId));
+
+    // 5. 기록 삭제
+    transaction.delete(recordRef);
+    
+    console.log("[API] AfterSchool Rollback successful");
+  });
+};
+
 export const fetchAllTeachers = async (): Promise<{uid: string, name: string}[]> => {
   try {
     const snapshot = await getDocs(collection(db, 'timetables'));

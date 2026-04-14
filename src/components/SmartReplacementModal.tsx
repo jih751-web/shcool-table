@@ -142,8 +142,14 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
     const mySourceSlotData = mySourceDaySlots.find(s => s.period === sourceSlot.period);
     if (!mySourceSlotData || !mySourceSlotData.subject) return [];
 
-    const dateRange = Array.from({length: 15}, (_, i) => {
-      const d = addDays(reqBaseDateObj, i);
+    // [수정] 탐색 시작일을 '선택한 날짜가 속한 주의 월요일'로 설정
+    const currentDay = reqBaseDateObj.getDay();
+    const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    const searchStartDate = addDays(reqBaseDateObj, diffToMonday);
+
+    // [수정] 월요일 기준으로 총 14일(이번 주 7일 + 다음 주 7일) 탐색
+    const dateRange = Array.from({length: 14}, (_, i) => {
+      const d = addDays(searchStartDate, i);
       const str = format(d, 'yyyy-MM-dd');
       const dow = format(d, 'E', { locale: ko });
       return { dateStr: str, dayOfWeek: dow };
