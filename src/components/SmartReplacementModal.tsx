@@ -38,7 +38,50 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
   const [searchQuery, setSearchQuery] = useState('');
   const [mode, setMode] = useState<'SWAP' | 'MAKEUP'>('SWAP');
 
+  // [UI 추가] 3주간 탭 상태 (Hooks 순서 에러 방지를 위해 최상단에 배치)
+  const [activeTab, setActiveTab] = useState<'PREV' | 'CURRENT' | 'NEXT'>('CURRENT');
+
+  // [UI 추가] 2-Depth 요일별 날짜 상태 (Hooks 순서 에러 방지를 위해 최상단에 배치)
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+
+  // 선택된 주차의 5일(월~금)을 계산
+  const weekDates = useMemo(() => {
+    if (!sourceSlot) return [];
+    const reqBaseDateObj = new Date(sourceSlot.date);
+    const currentDay = reqBaseDateObj.getDay();
+    const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    const currentWeekMonday = addDays(reqBaseDateObj, diffToMonday);
+
+    let searchStartDate = currentWeekMonday;
+    if (activeTab === 'PREV') searchStartDate = addDays(currentWeekMonday, -7);
+    if (activeTab === 'NEXT') searchStartDate = addDays(currentWeekMonday, 7);
+
+    return Array.from({length: 5}, (_, i) => {
+      const d = addDays(searchStartDate, i);
+      return {
+        dateStr: format(d, 'yyyy-MM-dd'),
+        dayOfWeek: format(d, 'E', { locale: ko }),
+        display: `${format(d, 'E', { locale: ko })} (${format(d, 'M/d')})`
+      };
+    });
+  }, [sourceSlot, activeTab]);
+
+  // 주차가 변경될 때 기본 요일 선택 (해당 주차의 월요일 또는 나의 원본 수업일)
+  useEffect(() => {
+    if (weekDates.length > 0) {
+      if (activeTab === 'CURRENT' && sourceSlot) {
+        // 이번주인 경우 원본 수업일이 포함되어 있다면 그 날짜를 우선 선택
+        const hasSourceDate = weekDates.some(d => d.dateStr === sourceSlot.date);
+        setSelectedDateStr(hasSourceDate ? sourceSlot.date : weekDates[0].dateStr);
+      } else {
+        setSelectedDateStr(weekDates[0].dateStr);
+      }
+    }
+  }, [weekDates, activeTab, sourceSlot]);
+
+
   // 1. 기초 시간표 및 오버라이드 한 번에 패치 (+14일 범위)
+
   useEffect(() => {
     if (isOpen && sourceSlot) {
       setLoading(true);
@@ -96,8 +139,31 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
     return [1,2,3,4,5,6,7].map(p => ({ period: p, subject: '', gradeClass: '' }));
   };
 
+  // [UI 추가] 내 시간표 미리보기용 스케줄 필터링 (Hooks 순서 에러 방지를 위해 최상단 레벨에 배치)
+  const myPreviewSchedule = useMemo(() => {
+    if (!myTimetable || !selectedDateStr) return [];
+    
+    const dateObj = new Date(selectedDateStr);
+    const dayOfWeek = format(dateObj, 'E', { locale: ko });
+    
+    const dailySlots = getDailySchedule(myTimetable.id!, selectedDateStr, dayOfWeek, myTimetable);
+    
+    const baseDay = myTimetable.schedule.find(d => d.dayOfWeek === dayOfWeek);
+    if (baseDay) {
+       const extraSlots = baseDay.slots.filter(s => s.period > 7);
+       extraSlots.forEach(es => {
+          if (!dailySlots.find(s => s.period === es.period)) {
+             dailySlots.push(es);
+          }
+       });
+    }
+    
+    return dailySlots.sort((a,b) => a.period - b.period);
+  }, [myTimetable, selectedDateStr, overrides]);
+
   /**
    * 보강(Makeup) 가능 목록 스캔: 
+
    * '해당 날짜/교시'에 상대방 교사가 수업이 없는가(공강인가)?
    */
   const makeupAvailableSlots = useMemo(() => {
@@ -142,18 +208,9 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
     const mySourceSlotData = mySourceDaySlots.find(s => s.period === sourceSlot.period);
     if (!mySourceSlotData || !mySourceSlotData.subject) return [];
 
-    // [수정] 탐색 시작일을 '선택한 날짜가 속한 주의 월요일'로 설정
-    const currentDay = reqBaseDateObj.getDay();
-    const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-    const searchStartDate = addDays(reqBaseDateObj, diffToMonday);
+    // [로직 수정] 2-Depth 선택된 단일 요일(날짜)에 대해서만 교체 가능 슬롯 탐색
+    const dateRange = weekDates.filter(d => d.dateStr === selectedDateStr);
 
-    // [수정] 월요일 기준으로 총 14일(이번 주 7일 + 다음 주 7일) 탐색
-    const dateRange = Array.from({length: 14}, (_, i) => {
-      const d = addDays(searchStartDate, i);
-      const str = format(d, 'yyyy-MM-dd');
-      const dow = format(d, 'E', { locale: ko });
-      return { dateStr: str, dayOfWeek: dow };
-    }).filter(d => d.dayOfWeek !== '토' && d.dayOfWeek !== '일');
 
     teachers.forEach(target => {
       const tarSourceDaySlots = getDailySchedule(target.id!, reqBaseDateStr, sourceSlot.dayOfWeek, target);
@@ -193,7 +250,9 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
     });
 
     return validSlots;
-  }, [sourceSlot, myTimetable, teachers, overrides]);
+  }, [sourceSlot, myTimetable, teachers, overrides, selectedDateStr, weekDates]);
+
+
 
   const currentAvailableSlots = mode === 'SWAP' ? swapAvailableSlots : makeupAvailableSlots;
 
@@ -298,95 +357,186 @@ export default function SmartReplacementModal({ isOpen, onClose, sourceSlot, myT
             </div>
           </div>
 
-          {/* Results Area */}
-          <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
-             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-2">
-                   <div className={`w-2 h-2 rounded-full animate-pulse ${mode === 'SWAP' ? 'bg-emerald-500' : 'bg-orange-500'}`}></div>
-                   <h3 className="font-bold text-slate-800">
-                     {mode === 'SWAP' ? '14일 내 교차 공강 일치 목록' : '해당 교시에 수업이 없는 교사 목록'}
-                     <span className={mode === 'SWAP' ? 'text-brand-600' : 'text-orange-600'}> ({currentAvailableSlots.length}건 발견)</span>
-                   </h3>
-                </div>
-                
-                {!loading && currentAvailableSlots.length > 0 && (
-                   <div className="relative w-full md:w-64">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                     <input 
-                        type="text"
-                        placeholder="교사명 검색..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-                     />
-                   </div>
-                )}
+          {/* [UI 추가] 3주간 주차 선택 탭 */}
+          {mode === 'SWAP' && (
+            <div className="flex flex-col gap-3">
+              {/* 1-Depth: 주차 선택 */}
+              <div className="flex bg-slate-200/50 p-1.5 rounded-2xl border border-slate-200 shadow-sm w-full sm:w-fit">
+                {[
+                  { id: 'PREV', label: '이전주' },
+                  { id: 'CURRENT', label: '이번주' },
+                  { id: 'NEXT', label: '다음주' }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => { setActiveTab(tab.id as any); setSelectedGlobalSlot(null); }}
+                    className={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-sm font-black transition-all duration-200 ${
+                      activeTab === tab.id 
+                        ? 'bg-white text-brand-700 shadow-md border border-brand-100' 
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* 2-Depth: 요일 선택 */}
+              <div className="flex flex-wrap gap-2 w-full">
+                {weekDates.map((dayData) => (
+                  <button
+                    key={dayData.dateStr}
+                    onClick={() => { setSelectedDateStr(dayData.dateStr); setSelectedGlobalSlot(null); }}
+                    className={`flex-1 min-w-[70px] sm:flex-none px-4 py-2.5 rounded-xl text-sm font-black transition-all duration-200 ${
+                      selectedDateStr === dayData.dateStr
+                        ? 'bg-brand-600 text-white shadow-md'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-brand-300'
+                    }`}
+                  >
+                    <span>{dayData.display}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+
+          {/* Main Split Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-300">
+             
+             {/* Left Panel: Results Area */}
+             <div className="lg:col-span-2 flex flex-col min-h-0">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2">
+                     <div className={`w-2 h-2 rounded-full animate-pulse ${mode === 'SWAP' ? 'bg-emerald-500' : 'bg-orange-500'}`}></div>
+                     <h3 className="font-bold text-slate-800">
+                       {mode === 'SWAP' ? '14일 내 교차 공강 일치 목록' : '해당 교시에 수업이 없는 교사 목록'}
+                       <span className={mode === 'SWAP' ? 'text-brand-600' : 'text-orange-600'}> ({currentAvailableSlots.length}건 발견)</span>
+                     </h3>
+                  </div>
+                  
+                  {!loading && currentAvailableSlots.length > 0 && (
+                     <div className="relative w-full md:w-64">
+                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                       <input 
+                          type="text"
+                          placeholder="교사명 검색..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                       />
+                     </div>
+                  )}
+               </div>
+
+               {loading ? (
+                  <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 text-slate-500 shadow-sm">
+                     <RotateCcw className="w-8 h-8 animate-spin text-brand-500 mb-3" /> 
+                     <p className="font-bold">데이터를 스캔 중입니다...</p>
+                  </div>
+               ) : currentAvailableSlots.length === 0 ? (
+                  <div className="bg-slate-100 text-slate-500 p-8 rounded-2xl border border-slate-200 text-center flex flex-col items-center justify-center shadow-inner">
+                     <X className="w-10 h-10 text-slate-300 mb-2" />
+                     <p className="font-bold text-lg mb-1">{mode === 'SWAP' ? '상호 공강 일치 내역이 0건입니다.' : '보강 가능한 교사가 없습니다.'}</p>
+                     {mode === 'SWAP' && <p className="text-sm border-t border-slate-200 pt-3 mt-3 w-3/4">선생님이 요구하신 원본 수업의 해당 시간에 쉬는 교사가 아예 없거나, 빈 틈새가 완벽히 매칭되지 않았습니다.</p>}
+                  </div>
+               ) : filteredSlots.length === 0 ? (
+                  <div className="bg-white text-slate-500 p-8 rounded-2xl border border-slate-200 text-center">
+                     <p className="font-bold">검색 결과가 없습니다.</p>
+                  </div>
+               ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto pr-2 custom-scrollbar min-h-[300px] max-h-[500px]">
+                     {filteredSlots.map((slot, idx) => {
+                       const isSelected = selectedGlobalSlot?.teacherId === slot.teacherId && 
+                                           selectedGlobalSlot?.date === slot.date && 
+                                           selectedGlobalSlot?.period === slot.period;
+                       
+                       const dObj = new Date(slot.date);
+                       const dStrDesc = format(dObj, 'M월 d일') + ` (${slot.dayOfWeek})`;
+
+                       return (
+                         <div 
+                           key={idx}
+                           onClick={() => setSelectedGlobalSlot(slot)}
+                           className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between min-h-[140px] relative overflow-hidden ${
+                             isSelected 
+                               ? (mode === 'SWAP' ? 'border-brand-500 bg-brand-50 shadow-md' : 'border-orange-500 bg-orange-50 shadow-md') 
+                               : 'border-slate-200 bg-white hover:border-brand-300 hover:shadow-sm'
+                           } transform ${isSelected ? 'scale-[1.02]' : 'scale-100'}`}
+                         >
+                            {isSelected && <div className={`absolute top-0 right-0 w-8 h-8 ${mode === 'SWAP' ? 'bg-brand-500' : 'bg-orange-500'} rounded-bl-2xl flex items-center justify-center text-white`}><CheckCircle2 className="w-4 h-4" /></div>}
+                            <div>
+                               <div className="flex items-center gap-2 mb-2">
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isSelected ? (mode === 'SWAP' ? 'bg-brand-600' : 'bg-orange-600') : 'bg-slate-800'} text-white`}>
+                                     {mode === 'SWAP' ? `D-${Math.max(0, Math.floor((new Date(slot.date).getTime() - new Date().getTime()) / (1000 * 3600 * 24)))}` : '보강'}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-500 tracking-tight">
+                                     {dStrDesc} {slot.period}교시
+                                  </span>
+                               </div>
+                               <p className={`font-black tracking-tight text-xl leading-tight mt-1 ${isSelected ? (mode === 'SWAP' ? 'text-brand-900' : 'text-orange-900') : 'text-slate-800'}`}>
+                                 {slot.subject}
+                               </p>
+                               <p className={`text-sm font-bold mt-1 ${isSelected ? (mode === 'SWAP' ? 'text-brand-700' : 'text-orange-700') : 'text-slate-500'}`}>
+                                 {slot.gradeClass}
+                               </p>
+                            </div>
+                            <div className={`mt-3 pt-3 border-t text-sm font-bold flex items-center justify-between ${isSelected ? (mode === 'SWAP' ? 'border-brand-200 text-brand-800' : 'border-orange-200 text-orange-800') : 'border-slate-100 text-slate-600'}`}>
+                               <div className="flex items-center gap-1.5">
+                                  <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px]"><Users className="w-3 h-3 text-slate-500" /></div>
+                                  {userProfiles[slot.teacherId]?.nickname || slot.teacherName} 선생님
+                               </div>
+                            </div>
+                         </div>
+                       );
+                     })}
+                  </div>
+               )}
              </div>
 
-             {loading ? (
-                <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 text-slate-500 shadow-sm">
-                   <RotateCcw className="w-8 h-8 animate-spin text-brand-500 mb-3" /> 
-                   <p className="font-bold">데이터를 스캔 중입니다...</p>
+             {/* Right Panel: My Timetable Preview */}
+             <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden min-h-[300px] max-h-[500px]">
+                <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+                   <h3 className="font-black text-slate-800 flex items-center gap-2">
+                     <CalendarDays className="w-4 h-4 text-brand-500" />
+                     내 시간표 미리보기
+                   </h3>
+                   <span className="text-xs font-bold text-slate-500 bg-white px-2 py-1 rounded-md border border-slate-200 shadow-sm">
+                     {selectedDateStr && format(new Date(selectedDateStr), 'M/d (E)', { locale: ko })}
+                   </span>
                 </div>
-             ) : currentAvailableSlots.length === 0 ? (
-                <div className="bg-slate-100 text-slate-500 p-8 rounded-2xl border border-slate-200 text-center flex flex-col items-center justify-center shadow-inner">
-                   <X className="w-10 h-10 text-slate-300 mb-2" />
-                   <p className="font-bold text-lg mb-1">{mode === 'SWAP' ? '상호 공강 일치 내역이 0건입니다.' : '보강 가능한 교사가 없습니다.'}</p>
-                   {mode === 'SWAP' && <p className="text-sm border-t border-slate-200 pt-3 mt-3 w-3/4">선생님이 요구하신 원본 수업의 해당 시간에 쉬는 교사가 아예 없거나, 빈 틈새가 완벽히 매칭되지 않았습니다.</p>}
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 custom-scrollbar">
+                   {myPreviewSchedule.length > 0 ? (
+                     myPreviewSchedule.map((slot, idx) => {
+                       const isEmpty = !slot.subject;
+                       return (
+                         <div key={idx} className={`flex items-center p-3 rounded-xl border transition-colors ${isEmpty ? 'bg-slate-50 border-slate-100' : 'bg-white border-brand-100 shadow-sm'}`}>
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shrink-0 mr-3 ${isEmpty ? 'bg-slate-200 text-slate-500' : 'bg-brand-100 text-brand-700'}`}>
+                               {slot.period}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                               {isEmpty ? (
+                                  <span className="text-sm font-bold text-slate-400">공강</span>
+                               ) : (
+                                  <div className="flex flex-col">
+                                     <span className="font-black text-slate-800 text-sm truncate">{slot.subject}</span>
+                                     <span className="text-xs font-bold text-slate-500 truncate">{slot.gradeClass}</span>
+                                  </div>
+                               )}
+                            </div>
+                         </div>
+                       );
+                     })
+                   ) : (
+                     <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6">
+                        <CalendarDays className="w-8 h-8 mb-2 opacity-50" />
+                        <p className="font-bold text-sm text-center">선택된 날짜의<br/>시간표가 없습니다.</p>
+                     </div>
+                   )}
                 </div>
-             ) : filteredSlots.length === 0 ? (
-                <div className="bg-white text-slate-500 p-8 rounded-2xl border border-slate-200 text-center">
-                   <p className="font-bold">검색 결과가 없습니다.</p>
-                </div>
-             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 overflow-y-auto pr-2 custom-scrollbar min-h-[300px] max-h-[500px]">
-                   {filteredSlots.map((slot, idx) => {
-                     const isSelected = selectedGlobalSlot?.teacherId === slot.teacherId && 
-                                         selectedGlobalSlot?.date === slot.date && 
-                                         selectedGlobalSlot?.period === slot.period;
-                     
-                     const dObj = new Date(slot.date);
-                     const dStrDesc = format(dObj, 'M월 d일') + ` (${slot.dayOfWeek})`;
-
-                     return (
-                       <div 
-                         key={idx}
-                         onClick={() => setSelectedGlobalSlot(slot)}
-                         className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between min-h-[140px] relative overflow-hidden ${
-                           isSelected 
-                             ? (mode === 'SWAP' ? 'border-brand-500 bg-brand-50 shadow-md' : 'border-orange-500 bg-orange-50 shadow-md') 
-                             : 'border-slate-200 bg-white hover:border-brand-300 hover:shadow-sm'
-                         } transform ${isSelected ? 'scale-[1.02]' : 'scale-100'}`}
-                       >
-                          {isSelected && <div className={`absolute top-0 right-0 w-8 h-8 ${mode === 'SWAP' ? 'bg-brand-500' : 'bg-orange-500'} rounded-bl-2xl flex items-center justify-center text-white`}><CheckCircle2 className="w-4 h-4" /></div>}
-                          <div>
-                             <div className="flex items-center gap-2 mb-2">
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isSelected ? (mode === 'SWAP' ? 'bg-brand-600' : 'bg-orange-600') : 'bg-slate-800'} text-white`}>
-                                   {mode === 'SWAP' ? `D-${Math.max(0, Math.floor((new Date(slot.date).getTime() - new Date().getTime()) / (1000 * 3600 * 24)))}` : '보강'}
-                                </span>
-                                <span className="text-xs font-bold text-slate-500 tracking-tight">
-                                   {dStrDesc} {slot.period}교시
-                                </span>
-                             </div>
-                             <p className={`font-black tracking-tight text-xl leading-tight mt-1 ${isSelected ? (mode === 'SWAP' ? 'text-brand-900' : 'text-orange-900') : 'text-slate-800'}`}>
-                               {slot.subject}
-                             </p>
-                             <p className={`text-sm font-bold mt-1 ${isSelected ? (mode === 'SWAP' ? 'text-brand-700' : 'text-orange-700') : 'text-slate-500'}`}>
-                               {slot.gradeClass}
-                             </p>
-                          </div>
-                          <div className={`mt-3 pt-3 border-t text-sm font-bold flex items-center justify-between ${isSelected ? (mode === 'SWAP' ? 'border-brand-200 text-brand-800' : 'border-orange-200 text-orange-800') : 'border-slate-100 text-slate-600'}`}>
-                             <div className="flex items-center gap-1.5">
-                                <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px]"><Users className="w-3 h-3 text-slate-500" /></div>
-                                {userProfiles[slot.teacherId]?.nickname || slot.teacherName} 선생님
-                             </div>
-                          </div>
-                       </div>
-                     );
-                   })}
-                </div>
-             )}
+             </div>
           </div>
+
         </div>
 
         {/* Footer */}
